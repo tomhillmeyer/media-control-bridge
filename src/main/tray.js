@@ -1,0 +1,214 @@
+const { Tray, Menu, nativeImage, app } = require('electron');
+const path = require('path');
+const logger = require('./utils/logger');
+
+class TrayManager {
+  constructor(mediaInterface, httpServer, wsServer) {
+    this.mediaInterface = mediaInterface;
+    this.httpServer = httpServer;
+    this.wsServer = wsServer;
+    this.tray = null;
+    this.currentTrack = null;
+    this.currentApp = null;
+    this.isPlaying = false;
+  }
+
+  create() {
+    try {
+      // Load the icon
+      const iconPath = path.join(__dirname, '../../mcb-icon.png');
+      let icon;
+
+      try {
+        icon = nativeImage.createFromPath(iconPath);
+
+        // Resize for menu bar (16x16 for normal, 32x32 for retina)
+        if (!icon.isEmpty()) {
+          icon = icon.resize({ width: 16, height: 16 });
+        } else {
+          logger.warn('Icon is empty, using default');
+          // Create a simple default icon
+          icon = nativeImage.createEmpty();
+        }
+      } catch (error) {
+        logger.error('Error loading icon:', error);
+        icon = nativeImage.createEmpty();
+      }
+
+      this.tray = new Tray(icon);
+      this.tray.setToolTip('Media Control Bridge');
+
+      // Set up event handlers
+      this.setupMediaEventHandlers();
+
+      // Get initial state from media interface
+      this.initializeState();
+
+      // Build initial menu
+      this.updateMenu();
+
+      logger.info('System tray created');
+    } catch (error) {
+      logger.error('Error creating tray:', error);
+    }
+  }
+
+  setupMediaEventHandlers() {
+    this.mediaInterface.on('track_changed', (data) => {
+      this.currentTrack = data;
+      this.currentApp = data.appName;
+      this.updateMenu();
+    });
+
+    this.mediaInterface.on('playback_state_changed', (data) => {
+      this.isPlaying = data.isPlaying;
+      this.updateMenu();
+    });
+
+    this.mediaInterface.on('media_connected', (data) => {
+      this.currentApp = data.appName;
+      this.updateMenu();
+    });
+
+    this.mediaInterface.on('media_disconnected', () => {
+      this.currentTrack = null;
+      this.currentApp = null;
+      this.isPlaying = false;
+      this.updateMenu();
+    });
+  }
+
+  initializeState() {
+    // Get current state from media interface
+    const status = this.mediaInterface.getFullStatus();
+
+    if (status.connected) {
+      this.currentApp = status.appName;
+      this.isPlaying = status.isPlaying;
+
+      if (status.track) {
+        this.currentTrack = status.track;
+      }
+    }
+  }
+
+  updateMenu() {
+    if (!this.tray) return;
+
+    const menuTemplate = [];
+
+    // Current track info
+    if (this.currentTrack && this.currentTrack.title) {
+      const trackTitle = this.currentTrack.title.length > 40
+        ? this.currentTrack.title.substring(0, 37) + '...'
+        : this.currentTrack.title;
+
+      menuTemplate.push({
+        label: trackTitle,
+        enabled: false
+      });
+
+      // Artist if available
+      if (this.currentTrack.artist && this.currentTrack.artist !== 'Unknown Artist') {
+        const artist = this.currentTrack.artist.length > 40
+          ? this.currentTrack.artist.substring(0, 37) + '...'
+          : this.currentTrack.artist;
+
+        menuTemplate.push({
+          label: `  ${artist}`,
+          enabled: false
+        });
+      }
+    } else {
+      menuTemplate.push({
+        label: 'No track playing',
+        enabled: false
+      });
+    }
+
+    // Source app
+    if (this.currentApp) {
+      menuTemplate.push({
+        label: `Source: ${this.currentApp}`,
+        enabled: false
+      });
+    } else {
+      menuTemplate.push({
+        label: 'No media app',
+        enabled: false
+      });
+    }
+
+    menuTemplate.push({ type: 'separator' });
+
+    // Playback controls
+    const hasMedia = this.currentApp !== null;
+
+    menuTemplate.push({
+      label: this.isPlaying ? 'Pause' : 'Play',
+      enabled: hasMedia,
+      click: () => {
+        this.mediaInterface.toggle().catch(err => {
+          logger.error('Error toggling playback:', err);
+        });
+      }
+    });
+
+    menuTemplate.push({
+      label: 'Next Track',
+      enabled: hasMedia,
+      click: () => {
+        this.mediaInterface.next().catch(err => {
+          logger.error('Error skipping to next:', err);
+        });
+      }
+    });
+
+    menuTemplate.push({
+      label: 'Previous Track',
+      enabled: hasMedia,
+      click: () => {
+        this.mediaInterface.previous().catch(err => {
+          logger.error('Error going to previous:', err);
+        });
+      }
+    });
+
+    menuTemplate.push({ type: 'separator' });
+
+    // Server info
+    const clientCount = this.wsServer.getClientCount();
+    menuTemplate.push({
+      label: `Server: localhost:${this.httpServer.getPort()}`,
+      enabled: false
+    });
+
+    menuTemplate.push({
+      label: `WebSocket clients: ${clientCount}`,
+      enabled: false
+    });
+
+    menuTemplate.push({ type: 'separator' });
+
+    // Quit
+    menuTemplate.push({
+      label: 'Quit',
+      click: () => {
+        app.quit();
+      }
+    });
+
+    const contextMenu = Menu.buildFromTemplate(menuTemplate);
+    this.tray.setContextMenu(contextMenu);
+  }
+
+  destroy() {
+    if (this.tray) {
+      this.tray.destroy();
+      this.tray = null;
+      logger.info('System tray destroyed');
+    }
+  }
+}
+
+module.exports = TrayManager;
