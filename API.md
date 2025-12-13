@@ -27,7 +27,7 @@ Get the complete current media status.
     "title": "Agnes",
     "artist": "Glass Animals",
     "album": "How To Be A Human Being",
-    "artwork": null,
+    "artwork": "https://i.scdn.co/image/ab67616d0000b273...",
     "duration": 271672,
     "position": 45000
   }
@@ -43,9 +43,9 @@ Get the complete current media status.
   - `title` (string) - Track title
   - `artist` (string) - Artist name
   - `album` (string) - Album name
-  - `artwork` (string|null) - Base64 encoded artwork (currently null)
+  - `artwork` (string|null) - Album artwork URL (Spotify only, null for other apps)
   - `duration` (number) - Track duration in milliseconds
-  - `position` (number) - Current playback position in milliseconds
+  - `position` (number) - Current playback position in milliseconds (updated every second)
 
 **Status Codes:**
 
@@ -65,7 +65,7 @@ Get information about the currently playing track.
   "artist": "Glass Animals",
   "album": "How To Be A Human Being",
   "duration": 271672,
-  "artwork": null,
+  "artwork": "https://i.scdn.co/image/ab67616d0000b273...",
   "appName": "Spotify"
 }
 ```
@@ -280,16 +280,25 @@ Sent when a new track starts playing or track information changes.
     "title": "Agnes",
     "artist": "Glass Animals",
     "album": "How To Be A Human Being",
-    "artwork": null,
+    "artwork": "https://i.scdn.co/image/ab67616d0000b273...",
     "duration": 271672,
     "appName": "Spotify"
   }
 }
 ```
 
+**Data Fields:**
+
+- `title` (string) - Track title
+- `artist` (string) - Artist name
+- `album` (string) - Album name
+- `artwork` (string|null) - Album artwork URL (available for Spotify, null for other apps)
+- `duration` (number) - Track duration in milliseconds
+- `appName` (string) - Name of the media application
+
 #### playback_state_changed
 
-Sent when playback state changes (play/pause).
+Sent when playback state or position changes (approximately every second while playing).
 
 ```json
 {
@@ -349,13 +358,29 @@ Sent when a media app connects or disconnects.
 
 ### macOS
 
-- Spotify
-- Apple Music (Music.app)
-- Safari (with media playing)
-- Google Chrome (with media playing)
-- Firefox (with media playing)
-- VLC
+- **Spotify** - Full support including album artwork URLs
+- **Apple Music (Music.app)** - Full support except artwork URLs
+- **Safari** (with media playing) - Basic support, no artwork
+- **Google Chrome** (with media playing) - Basic support, no artwork
+- **Firefox** (with media playing) - Basic support, no artwork
+- **VLC** - Basic support, no artwork
 - Any app that integrates with macOS media controls
+
+### Album Artwork Support
+
+Album artwork availability varies by media application:
+
+- **Spotify**: ✅ Full support - Returns direct URLs to album artwork hosted on Spotify's CDN (e.g., `https://i.scdn.co/image/...`)
+- **Apple Music**: ❌ Not supported - AppleScript doesn't provide artwork URLs
+- **Browsers & Others**: ❌ Not supported - No artwork API available
+
+The `artwork` field will contain:
+- A valid URL string for Spotify tracks
+- `null` for all other applications
+
+**Using Artwork in Companion:**
+
+The artwork URL can be used in Companion to display album art on Stream Deck buttons or other surfaces that support image variables.
 
 ---
 
