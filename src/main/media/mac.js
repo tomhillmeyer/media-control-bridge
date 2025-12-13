@@ -66,8 +66,11 @@ class MacMediaController {
         this.emit('track_changed', { ...trackInfo, appName: app });
       }
 
-      // Check if playback state changed
-      if (this.hasPlaybackStateChanged(playbackState)) {
+      // Always update playback state (for position updates)
+      const positionChanged = this.currentState.position !== playbackState.position;
+      const playingChanged = this.currentState.isPlaying !== playbackState.isPlaying;
+
+      if (positionChanged || playingChanged) {
         this.currentState = playbackState;
         this.emit('playback_state_changed', playbackState);
       }
@@ -175,12 +178,15 @@ class MacMediaController {
       const { stdout } = await execAsync(script);
       const [title, artist, album, duration] = stdout.trim().split('|');
 
+      // Fetch artwork URL
+      const artworkUrl = await this.fetchArtworkUrl(appName);
+
       const trackInfo = {
         title: title || 'Unknown',
         artist: artist || 'Unknown Artist',
         album: album || 'Unknown Album',
         duration: parseInt(duration) || 0,
-        artwork: null
+        artwork: artworkUrl
       };
 
       return trackInfo;
@@ -193,6 +199,30 @@ class MacMediaController {
         duration: 0,
         artwork: null
       };
+    }
+  }
+
+  async fetchArtworkUrl(appName) {
+    try {
+      let script;
+
+      if (appName === 'Spotify') {
+        script = `osascript -e 'tell application "Spotify" to return artwork url of current track'`;
+      } else if (appName === 'Music') {
+        // Music app doesn't provide direct artwork URL via AppleScript
+        // We would need to export the artwork to a temp file
+        return null;
+      } else {
+        return null;
+      }
+
+      const { stdout } = await execAsync(script);
+      const artworkUrl = stdout.trim();
+
+      return artworkUrl || null;
+    } catch (error) {
+      // Artwork is optional, don't log errors
+      return null;
     }
   }
 
