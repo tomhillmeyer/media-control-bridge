@@ -4,20 +4,83 @@
   "version": "1.0.0",
   "description": "Bridge media players to Bitfocus Companion via OS media controls",
   "main": "src/main/index.js",
+  "author": {
+    "name": "Tom Hillmeyer",
+    "email": "tom@tomhillmeyer.com"
+  },
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:mac:arm": "electron-builder --mac --arm64",
+    "dist:mac:intel": "electron-builder --mac --x64"
   },
-  "keywords": ["electron", "media", "companion", "macos"],
-  "author": "",
+  "keywords": [
+    "electron",
+    "media",
+    "companion",
+    "macos"
+  ],
   "license": "MIT",
   "dependencies": {
-    "electron": "^28.0.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "ws": "^8.14.2",
-    "cors": "^2.8.5"
+    "ws": "^8.14.2"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
+    "@electron/osx-sign": "^1.3.3",
+    "dotenv": "^16.6.1",
+    "electron": "^28.0.0",
     "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.creativeland.mediacontrolbridge",
+    "productName": "Media Control Bridge",
+    "files": [
+      "src/**/*",
+      "mcb-app-icon.png",
+      "mcb-icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": {
+        "target": "dmg",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      },
+      "icon": "mcb-app-icon.png",
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.plist",
+      "entitlementsInherit": "entitlements.plist",
+      "gatekeeperAssess": false,
+      "identity": "Creativeland, LLC (22SGVMMH49)",
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "extendInfo": {
+        "LSUIElement": true
+      }
+    },
+    "afterSign": "notarize.js",
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }
