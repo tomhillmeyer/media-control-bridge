@@ -145,46 +145,14 @@ namespace MediaHelper
                     Console.WriteLine(JsonSerializer.Serialize(connected));
                 }
 
-                // Debug: Check what we can access from the session
-                Console.Error.WriteLine($"Session SourceAppUserModelId: {session.SourceAppUserModelId}");
-
                 var playbackInfo = session.GetPlaybackInfo();
-                Console.Error.WriteLine($"PlaybackInfo - Status: {playbackInfo.PlaybackStatus}, Type: {playbackInfo.PlaybackType}");
-                Console.Error.WriteLine($"PlaybackInfo - Controls: Play={playbackInfo.Controls.IsPlayEnabled}, Pause={playbackInfo.Controls.IsPauseEnabled}, Next={playbackInfo.Controls.IsNextEnabled}, Prev={playbackInfo.Controls.IsPreviousEnabled}");
-
                 var timelineProps = session.GetTimelineProperties();
-                Console.Error.WriteLine($"Timeline - StartTime: {timelineProps.StartTime}, EndTime: {timelineProps.EndTime}, Position: {timelineProps.Position}");
 
-                Console.Error.WriteLine("About to call TryGetMediaPropertiesAsync...");
-                GlobalSystemMediaTransportControlsSessionMediaProperties? mediaProperties = null;
-                try
-                {
-                    mediaProperties = await session.TryGetMediaPropertiesAsync();
-                    Console.Error.WriteLine($"TryGetMediaPropertiesAsync completed. Result is null: {mediaProperties == null}");
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"EXCEPTION in TryGetMediaPropertiesAsync: {ex.GetType().Name} - {ex.Message}");
-                }
-
+                var mediaProperties = await session.TryGetMediaPropertiesAsync();
                 bool isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
 
-                // Check if media properties are available
                 if (mediaProperties == null)
                 {
-                    Console.Error.WriteLine("ERROR: mediaProperties is null!");
-                }
-                else
-                {
-                    Console.Error.WriteLine($"SUCCESS: Got media properties!");
-                    Console.Error.WriteLine($"  Title: {mediaProperties.Title ?? "(null)"}");
-                    Console.Error.WriteLine($"  Artist: {mediaProperties.Artist ?? "(null)"}");
-                    Console.Error.WriteLine($"  Album: {mediaProperties.AlbumTitle ?? "(null)"}");
-                }
-
-                if (mediaProperties == null)
-                {
-
                     // Emit a placeholder track if we haven't sent one yet for this session
                     if (lastTrackId == null)
                     {
@@ -224,13 +192,10 @@ namespace MediaHelper
                 }
 
                 string trackId = $"{mediaProperties.Title}|{mediaProperties.Artist}|{mediaProperties.AlbumTitle}";
-                Console.Error.WriteLine($"Current trackId: {trackId}");
-                Console.Error.WriteLine($"Last trackId: {lastTrackId ?? "(null)"}");
 
                 // Check if track changed
                 if (trackId != lastTrackId)
                 {
-                    Console.Error.WriteLine("Track changed! Emitting track_changed event...");
                     lastTrackId = trackId;
 
                     var trackChanged = new
@@ -246,13 +211,7 @@ namespace MediaHelper
                             appName = GetAppName(session.SourceAppUserModelId)
                         }
                     };
-                    string json = JsonSerializer.Serialize(trackChanged);
-                    Console.Error.WriteLine($"Emitting to stdout: {json}");
-                    Console.WriteLine(json);
-                }
-                else
-                {
-                    Console.Error.WriteLine("Track has NOT changed (same as last)");
+                    Console.WriteLine(JsonSerializer.Serialize(trackChanged));
                 }
 
                 // Check if playback state changed

@@ -47,3 +47,10 @@ Connect to `ws://localhost:6262/ws` for real-time updates.
 - `track_changed` - New track started playing
 - `playback_state_changed` - Play/pause state changed
 - `connection_status` - Media app connected/disconnected
+
+## Current Compatibility
+|                                                  | macOS + Spotify | macOS + Others | Windows |
+|--------------------------------------------------|-----------------|----------------|---------|
+| Title, Artist, Album, App Name, Connected Status | ✅               | ✅              | ✅       |
+| Duration, Playback Position                      | ✅               | ✅              | ❌       |
+| Album Artwork                                    | ✅               | ❌              | ❌       |

@@ -75,35 +75,28 @@ class TrayManager {
 
   setupMediaEventHandlers() {
     this.mediaInterface.on('track_changed', (data) => {
-      logger.info('Tray received track_changed:', data);
       this.currentTrack = data || null;
       if (data && data.appName) {
         this.currentApp = data.appName;
       }
-      logger.info(`Tray updating menu with track: ${this.currentTrack?.title}, app: ${this.currentApp}`);
       this.updateMenu();
     });
 
     this.mediaInterface.on('playback_state_changed', (data) => {
-      logger.info('Tray received playback_state_changed:', data);
       if (data && typeof data.isPlaying !== 'undefined') {
         this.isPlaying = data.isPlaying;
       }
-      logger.info(`Tray updating menu with isPlaying: ${this.isPlaying}`);
       this.updateMenu();
     });
 
     this.mediaInterface.on('media_connected', (data) => {
-      logger.info('Tray received media_connected:', data);
       if (data && data.appName) {
         this.currentApp = data.appName;
       }
-      logger.info(`Tray updating menu with app: ${this.currentApp}`);
       this.updateMenu();
     });
 
     this.mediaInterface.on('media_disconnected', () => {
-      logger.info('Tray received media_disconnected');
       this.currentTrack = null;
       this.currentApp = null;
       this.isPlaying = false;

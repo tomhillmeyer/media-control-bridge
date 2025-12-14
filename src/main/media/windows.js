@@ -37,18 +37,13 @@ class WindowsMediaController {
     // Handle stdout (JSON events)
     this.watchProcess.stdout.on('data', (data) => {
       const dataStr = data.toString();
-      logger.info('MediaHelper stdout received:', dataStr);
       const lines = dataStr.split('\n').filter(line => line.trim());
-      logger.info(`Processing ${lines.length} lines from stdout`);
       for (const line of lines) {
         try {
-          logger.info('Parsing line:', line);
           const event = JSON.parse(line);
-          logger.info('Parsed event:', JSON.stringify(event));
           this.handleEvent(event);
         } catch (error) {
           logger.error('Error parsing MediaHelper output:', error.message);
-          logger.error('Invalid JSON line:', line);
         }
       }
     });
@@ -116,36 +111,28 @@ class WindowsMediaController {
       return;
     }
 
-    logger.info(`handleEvent called with type: ${event.type}`);
-
     switch (event.type) {
       case 'ready':
-        logger.info('Ready event received');
         if (this._readyResolve) {
-          logger.info('Resolving ready promise');
           this._readyResolve();
           this._readyResolve = null;
         }
         break;
 
       case 'media_connected':
-        logger.info('media_connected event:', event.data);
         if (event.data && event.data.appName) {
           this.currentApp = event.data.appName;
-          logger.info(`Emitting media_connected with appName: ${event.data.appName}`);
           this.emit('media_connected', { appName: event.data.appName });
         }
         break;
 
       case 'media_disconnected':
-        logger.info('media_disconnected event');
         this.currentApp = null;
         this.currentTrack = null;
         this.emit('media_disconnected', { connected: false });
         break;
 
       case 'track_changed':
-        logger.info('track_changed event:', event.data);
         if (event.data) {
           this.currentTrack = {
             title: event.data.title || 'Unknown',
@@ -157,17 +144,14 @@ class WindowsMediaController {
           if (event.data.appName) {
             this.currentApp = event.data.appName;
           }
-          logger.info(`Emitting track_changed: ${this.currentTrack.title} by ${this.currentTrack.artist}, appName: ${this.currentApp}`);
           this.emit('track_changed', { ...this.currentTrack, appName: this.currentApp });
         }
         break;
 
       case 'playback_state_changed':
-        logger.info('playback_state_changed event:', event.data);
         if (event.data && typeof event.data.isPlaying !== 'undefined') {
           this.currentState.isPlaying = event.data.isPlaying;
           this.currentState.position = event.data.position || 0;
-          logger.info(`Emitting playback_state_changed: isPlaying=${event.data.isPlaying}`);
           this.emit('playback_state_changed', {
             isPlaying: event.data.isPlaying,
             position: event.data.position || 0
@@ -178,8 +162,6 @@ class WindowsMediaController {
       default:
         logger.warn('Unknown event type:', event.type);
     }
-
-    // Note: No need to call eventCallback here - the emit() calls already do that
   }
 
   async executeCommand(command) {

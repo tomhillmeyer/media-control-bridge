@@ -43,15 +43,10 @@ class MediaInterface extends EventEmitter {
   }
 
   handlePlatformEvent(event, data) {
-    logger.info(`MediaInterface.handlePlatformEvent called`);
-    logger.info(`  event param: ${event}`);
-    logger.info(`  data param:`, data);
-
     switch (event) {
       case 'track_changed':
         if (data) {
           this.currentTrack = data;
-          logger.info(`MediaInterface emitting track_changed:`, data);
           this.emit('track_changed', data);
         }
         break;
@@ -60,7 +55,6 @@ class MediaInterface extends EventEmitter {
         if (data && typeof data.isPlaying !== 'undefined') {
           this.currentState.isPlaying = data.isPlaying;
           this.currentState.position = data.position || 0;
-          logger.info(`MediaInterface emitting playback_state_changed:`, data);
           this.emit('playback_state_changed', data);
         }
         break;
@@ -69,7 +63,6 @@ class MediaInterface extends EventEmitter {
         if (data && data.appName) {
           this.currentApp = data.appName;
           this.currentState.connected = true;
-          logger.info(`MediaInterface emitting media_connected:`, data);
           this.emit('media_connected', data);
         }
         break;
@@ -78,7 +71,6 @@ class MediaInterface extends EventEmitter {
         this.currentApp = null;
         this.currentState.connected = false;
         this.currentTrack = null;
-        logger.info(`MediaInterface emitting media_disconnected`);
         this.emit('media_disconnected', { connected: false });
         break;
     }
