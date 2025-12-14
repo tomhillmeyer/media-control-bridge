@@ -23,6 +23,11 @@ class WindowsMediaController {
 
     logger.info(`Using MediaHelper at: ${helperPath}`);
 
+    // Set up promise to wait for ready signal BEFORE spawning process
+    const readyPromise = new Promise((resolve) => {
+      this._readyResolve = resolve;
+    });
+
     // Start the watch process
     this.watchProcess = spawn(helperPath, ['watch'], {
       windowsHide: true,
@@ -31,20 +36,32 @@ class WindowsMediaController {
 
     // Handle stdout (JSON events)
     this.watchProcess.stdout.on('data', (data) => {
-      const lines = data.toString().split('\n').filter(line => line.trim());
+      const dataStr = data.toString();
+      logger.info('MediaHelper stdout received:', dataStr);
+      const lines = dataStr.split('\n').filter(line => line.trim());
+      logger.info(`Processing ${lines.length} lines from stdout`);
       for (const line of lines) {
         try {
+          logger.info('Parsing line:', line);
           const event = JSON.parse(line);
+          logger.info('Parsed event:', JSON.stringify(event));
           this.handleEvent(event);
         } catch (error) {
           logger.error('Error parsing MediaHelper output:', error.message);
+          logger.error('Invalid JSON line:', line);
         }
       }
     });
 
     // Handle stderr
     this.watchProcess.stderr.on('data', (data) => {
-      logger.error('MediaHelper stderr:', data.toString());
+      const message = data.toString().trim();
+      // Some stderr messages are informational, not errors
+      if (message.includes('Current session:') || message.includes('Media properties returned null')) {
+        logger.info('MediaHelper:', message);
+      } else {
+        logger.error('MediaHelper stderr:', message);
+      }
     });
 
     // Handle process exit
@@ -63,23 +80,8 @@ class WindowsMediaController {
       }, 5000);
     });
 
-    // Wait for ready signal
-    return new Promise((resolve) => {
-      const readyHandler = (event) => {
-        if (event.type === 'ready') {
-          logger.info('MediaHelper is ready');
-          resolve();
-        }
-      };
-
-      const originalCallback = this.eventCallback;
-      this.eventCallback = (event) => {
-        readyHandler(event);
-        if (originalCallback) {
-          originalCallback(event);
-        }
-      };
-    });
+    // Return the ready promise
+    return readyPromise;
   }
 
   stop() {
@@ -91,64 +93,93 @@ class WindowsMediaController {
   }
 
   getHelperPath(arch) {
-    // In production (packaged app), the helper will be in resources/bin
-    // In development, it should be in resources/bin relative to project root
-    if (process.env.NODE_ENV === 'production' || process.resourcesPath) {
-      // Production: app.asar.unpacked or resources folder
-      const resourcesPath = process.resourcesPath || path.join(process.cwd(), 'resources');
-      return path.join(resourcesPath, 'bin', arch, 'MediaHelper.exe');
+    let helperPath;
+
+    if (process.resourcesPath) {
+      // Production: packaged app
+      // Check app.asar.unpacked first (where unpacked files go)
+      helperPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'bin', arch, 'MediaHelper.exe');
+      logger.info(`Looking for MediaHelper at: ${helperPath}`);
     } else {
       // Development: relative to project root
-      return path.join(__dirname, '..', '..', '..', 'resources', 'bin', arch, 'MediaHelper.exe');
+      helperPath = path.join(__dirname, '..', '..', '..', 'resources', 'bin', arch, 'MediaHelper.exe');
+      logger.info(`Development mode - Looking for MediaHelper at: ${helperPath}`);
     }
+
+    return helperPath;
   }
 
   handleEvent(event) {
+    // Validate event structure
+    if (!event || !event.type) {
+      logger.warn('Invalid event received:', event);
+      return;
+    }
+
+    logger.info(`handleEvent called with type: ${event.type}`);
+
     switch (event.type) {
       case 'ready':
-        // Ready signal handled in start()
+        logger.info('Ready event received');
+        if (this._readyResolve) {
+          logger.info('Resolving ready promise');
+          this._readyResolve();
+          this._readyResolve = null;
+        }
         break;
 
       case 'media_connected':
-        this.currentApp = event.data.appName;
-        this.emit('media_connected', { appName: event.data.appName });
+        logger.info('media_connected event:', event.data);
+        if (event.data && event.data.appName) {
+          this.currentApp = event.data.appName;
+          logger.info(`Emitting media_connected with appName: ${event.data.appName}`);
+          this.emit('media_connected', { appName: event.data.appName });
+        }
         break;
 
       case 'media_disconnected':
+        logger.info('media_disconnected event');
         this.currentApp = null;
         this.currentTrack = null;
         this.emit('media_disconnected', { connected: false });
         break;
 
       case 'track_changed':
-        this.currentTrack = {
-          title: event.data.title,
-          artist: event.data.artist,
-          album: event.data.album,
-          duration: event.data.duration,
-          artwork: event.data.artwork
-        };
-        this.currentApp = event.data.appName;
-        this.emit('track_changed', { ...this.currentTrack, appName: this.currentApp });
+        logger.info('track_changed event:', event.data);
+        if (event.data) {
+          this.currentTrack = {
+            title: event.data.title || 'Unknown',
+            artist: event.data.artist || 'Unknown Artist',
+            album: event.data.album || 'Unknown Album',
+            duration: event.data.duration || 0,
+            artwork: event.data.artwork
+          };
+          if (event.data.appName) {
+            this.currentApp = event.data.appName;
+          }
+          logger.info(`Emitting track_changed: ${this.currentTrack.title} by ${this.currentTrack.artist}, appName: ${this.currentApp}`);
+          this.emit('track_changed', { ...this.currentTrack, appName: this.currentApp });
+        }
         break;
 
       case 'playback_state_changed':
-        this.currentState.isPlaying = event.data.isPlaying;
-        this.currentState.position = event.data.position;
-        this.emit('playback_state_changed', {
-          isPlaying: event.data.isPlaying,
-          position: event.data.position
-        });
+        logger.info('playback_state_changed event:', event.data);
+        if (event.data && typeof event.data.isPlaying !== 'undefined') {
+          this.currentState.isPlaying = event.data.isPlaying;
+          this.currentState.position = event.data.position || 0;
+          logger.info(`Emitting playback_state_changed: isPlaying=${event.data.isPlaying}`);
+          this.emit('playback_state_changed', {
+            isPlaying: event.data.isPlaying,
+            position: event.data.position || 0
+          });
+        }
         break;
 
       default:
         logger.warn('Unknown event type:', event.type);
     }
 
-    // Allow external event handling
-    if (this.eventCallback) {
-      this.eventCallback(event);
-    }
+    // Note: No need to call eventCallback here - the emit() calls already do that
   }
 
   async executeCommand(command) {

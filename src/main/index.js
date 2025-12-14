@@ -110,12 +110,23 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', () => {
     logger.info('Attempted to start second instance');
+    // On Windows, focus/show the tray icon area when user tries to start second instance
+    if (mcb.trayManager && mcb.trayManager.tray) {
+      mcb.trayManager.tray.displayBalloon({
+        title: 'Media Control Bridge',
+        content: 'Application is already running in the system tray'
+      });
+    }
   });
 }
 
-// macOS specific: Don't show in dock
+// Platform-specific configuration
 if (process.platform === 'darwin') {
+  // macOS: Don't show in dock
   app.dock.hide();
+} else if (process.platform === 'win32') {
+  // Windows: Set app user model ID for taskbar grouping
+  app.setAppUserModelId('com.creativeland.mediacontrolbridge');
 }
 
 // Handle uncaught exceptions

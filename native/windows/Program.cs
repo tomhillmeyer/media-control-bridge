@@ -70,21 +70,15 @@ namespace MediaHelper
         {
             sessionManager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
 
-            // Send initial status
-            await CheckAndEmitStatus();
-
-            // Set up event handlers
+            // Set up event handlers first
             sessionManager.SessionsChanged += OnSessionsChanged;
-
-            if (currentSession != null)
-            {
-                currentSession.MediaPropertiesChanged += OnMediaPropertiesChanged;
-                currentSession.PlaybackInfoChanged += OnPlaybackInfoChanged;
-            }
 
             // Output ready signal
             var ready = new { type = "ready" };
             Console.WriteLine(JsonSerializer.Serialize(ready));
+
+            // Send initial status after ready
+            await CheckAndEmitStatus();
 
             // Keep running
             await Task.Delay(-1);
@@ -151,15 +145,92 @@ namespace MediaHelper
                     Console.WriteLine(JsonSerializer.Serialize(connected));
                 }
 
-                var mediaProperties = await session.TryGetMediaPropertiesAsync();
+                // Debug: Check what we can access from the session
+                Console.Error.WriteLine($"Session SourceAppUserModelId: {session.SourceAppUserModelId}");
+
                 var playbackInfo = session.GetPlaybackInfo();
+                Console.Error.WriteLine($"PlaybackInfo - Status: {playbackInfo.PlaybackStatus}, Type: {playbackInfo.PlaybackType}");
+                Console.Error.WriteLine($"PlaybackInfo - Controls: Play={playbackInfo.Controls.IsPlayEnabled}, Pause={playbackInfo.Controls.IsPauseEnabled}, Next={playbackInfo.Controls.IsNextEnabled}, Prev={playbackInfo.Controls.IsPreviousEnabled}");
+
+                var timelineProps = session.GetTimelineProperties();
+                Console.Error.WriteLine($"Timeline - StartTime: {timelineProps.StartTime}, EndTime: {timelineProps.EndTime}, Position: {timelineProps.Position}");
+
+                Console.Error.WriteLine("About to call TryGetMediaPropertiesAsync...");
+                GlobalSystemMediaTransportControlsSessionMediaProperties? mediaProperties = null;
+                try
+                {
+                    mediaProperties = await session.TryGetMediaPropertiesAsync();
+                    Console.Error.WriteLine($"TryGetMediaPropertiesAsync completed. Result is null: {mediaProperties == null}");
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"EXCEPTION in TryGetMediaPropertiesAsync: {ex.GetType().Name} - {ex.Message}");
+                }
+
+                bool isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+
+                // Check if media properties are available
+                if (mediaProperties == null)
+                {
+                    Console.Error.WriteLine("ERROR: mediaProperties is null!");
+                }
+                else
+                {
+                    Console.Error.WriteLine($"SUCCESS: Got media properties!");
+                    Console.Error.WriteLine($"  Title: {mediaProperties.Title ?? "(null)"}");
+                    Console.Error.WriteLine($"  Artist: {mediaProperties.Artist ?? "(null)"}");
+                    Console.Error.WriteLine($"  Album: {mediaProperties.AlbumTitle ?? "(null)"}");
+                }
+
+                if (mediaProperties == null)
+                {
+
+                    // Emit a placeholder track if we haven't sent one yet for this session
+                    if (lastTrackId == null)
+                    {
+                        lastTrackId = "unknown";
+                        var trackChanged = new
+                        {
+                            type = "track_changed",
+                            data = new
+                            {
+                                title = "Playing from " + GetAppName(session.SourceAppUserModelId),
+                                artist = "Track information unavailable",
+                                album = "",
+                                duration = (int)timelineProps.EndTime.TotalSeconds,
+                                artwork = (string?)null,
+                                appName = GetAppName(session.SourceAppUserModelId)
+                            }
+                        };
+                        Console.WriteLine(JsonSerializer.Serialize(trackChanged));
+                    }
+
+                    // Still emit playback state if we have it
+                    if (isPlaying != lastIsPlaying)
+                    {
+                        lastIsPlaying = isPlaying;
+                        var playbackStateChanged = new
+                        {
+                            type = "playback_state_changed",
+                            data = new
+                            {
+                                isPlaying = isPlaying,
+                                position = (int)timelineProps.Position.TotalSeconds
+                            }
+                        };
+                        Console.WriteLine(JsonSerializer.Serialize(playbackStateChanged));
+                    }
+                    return;
+                }
 
                 string trackId = $"{mediaProperties.Title}|{mediaProperties.Artist}|{mediaProperties.AlbumTitle}";
-                bool isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                Console.Error.WriteLine($"Current trackId: {trackId}");
+                Console.Error.WriteLine($"Last trackId: {lastTrackId ?? "(null)"}");
 
                 // Check if track changed
                 if (trackId != lastTrackId)
                 {
+                    Console.Error.WriteLine("Track changed! Emitting track_changed event...");
                     lastTrackId = trackId;
 
                     var trackChanged = new
@@ -170,12 +241,18 @@ namespace MediaHelper
                             title = mediaProperties.Title ?? "Unknown",
                             artist = mediaProperties.Artist ?? "Unknown Artist",
                             album = mediaProperties.AlbumTitle ?? "Unknown Album",
-                            duration = 0, // Windows API doesn't provide duration easily
+                            duration = (int)timelineProps.EndTime.TotalSeconds,
                             artwork = (string?)null,
                             appName = GetAppName(session.SourceAppUserModelId)
                         }
                     };
-                    Console.WriteLine(JsonSerializer.Serialize(trackChanged));
+                    string json = JsonSerializer.Serialize(trackChanged);
+                    Console.Error.WriteLine($"Emitting to stdout: {json}");
+                    Console.WriteLine(json);
+                }
+                else
+                {
+                    Console.Error.WriteLine("Track has NOT changed (same as last)");
                 }
 
                 // Check if playback state changed
@@ -189,7 +266,7 @@ namespace MediaHelper
                         data = new
                         {
                             isPlaying = isPlaying,
-                            position = 0
+                            position = (int)timelineProps.Position.TotalSeconds
                         }
                     };
                     Console.WriteLine(JsonSerializer.Serialize(playbackStateChanged));
@@ -220,6 +297,20 @@ namespace MediaHelper
 
             var mediaProperties = await session.TryGetMediaPropertiesAsync();
             var playbackInfo = session.GetPlaybackInfo();
+
+            // Check if media properties are available
+            if (mediaProperties == null)
+            {
+                var emptyStatus = new
+                {
+                    connected = true,
+                    appName = GetAppName(session.SourceAppUserModelId),
+                    isPlaying = playbackInfo.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing,
+                    track = (object?)null
+                };
+                Console.WriteLine(JsonSerializer.Serialize(emptyStatus));
+                return;
+            }
 
             var status = new
             {
@@ -285,12 +376,44 @@ namespace MediaHelper
 
         static GlobalSystemMediaTransportControlsSession? GetCurrentSession()
         {
-            if (sessionManager == null)
+            try
             {
-                sessionManager = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().GetAwaiter().GetResult();
-            }
+                if (sessionManager == null)
+                {
+                    sessionManager = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().GetAwaiter().GetResult();
+                }
 
-            return sessionManager.GetCurrentSession();
+                var session = sessionManager.GetCurrentSession();
+
+                // If GetCurrentSession returns null, try to get the first available session
+                if (session == null)
+                {
+                    var sessions = sessionManager.GetSessions();
+                    Console.Error.WriteLine($"GetCurrentSession returned null, trying fallback. Total sessions: {sessions.Count}");
+
+                    if (sessions.Count > 0)
+                    {
+                        // Return the first session
+                        session = sessions[0];
+                        Console.Error.WriteLine($"Using first available session: {session.SourceAppUserModelId}");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("No sessions available");
+                    }
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Current session: {session.SourceAppUserModelId}");
+                }
+
+                return session;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error in GetCurrentSession: {ex.Message}");
+                return null;
+            }
         }
 
         static string GetAppName(string appUserModelId)

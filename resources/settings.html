@@ -11,6 +11,19 @@
       padding: 20px;
       background: white;
       color: #333;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 40px);
+    }
+    .settings-section {
+      flex-shrink: 0;
+      margin-bottom: 20px;
+    }
+    .logs-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     label {
       display: block;
@@ -23,7 +36,7 @@
       margin-bottom: 6px;
     }
     input[type="number"] {
-      width: 100%;
+      width: 200px;
       padding: 6px 8px;
       font-size: 13px;
       border: 1px solid #ccc;
@@ -35,8 +48,7 @@
       border-color: #007aff;
     }
     .button-group {
-      margin-top: 20px;
-      text-align: right;
+      margin-top: 10px;
     }
     button {
       padding: 6px 16px;
@@ -46,9 +58,16 @@
       cursor: pointer;
       background: #007aff;
       color: white;
+      margin-right: 8px;
     }
     button:hover {
       background: #0051d5;
+    }
+    button.secondary {
+      background: #6c757d;
+    }
+    button.secondary:hover {
+      background: #5a6268;
     }
     .message {
       font-size: 12px;
@@ -64,25 +83,90 @@
     .message.show {
       display: block;
     }
+    .logs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .logs-header h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .log-container {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 10px;
+      background: #f8f9fa;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+    .log-entry {
+      margin-bottom: 8px;
+      word-wrap: break-word;
+      line-height: 1.4;
+    }
+    .log-entry .timestamp {
+      color: #666;
+      font-size: 10px;
+    }
+    .log-entry .level {
+      font-weight: bold;
+      margin: 0 8px;
+    }
+    .log-entry.INFO .level {
+      color: #007aff;
+    }
+    .log-entry.ERROR .level {
+      color: #dc3545;
+    }
+    .log-entry.WARN .level {
+      color: #ffc107;
+    }
+    .log-entry.DEBUG .level {
+      color: #6c757d;
+    }
+    .log-data {
+      display: block;
+      margin-left: 100px;
+      margin-top: 2px;
+      color: #495057;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
-  <form id="settings-form">
-    <label for="httpPort">Port:</label>
-    <div class="help-text">Default: 6262</div>
-    <input
-      type="number"
-      id="httpPort"
-      name="httpPort"
-      min="1024"
-      max="65535"
-      required
-    >
-    <div id="message" class="message"></div>
-    <div class="button-group">
-      <button type="submit">Save & Restart</button>
+  <div class="settings-section">
+    <form id="settings-form">
+      <label for="httpPort">Port:</label>
+      <div class="help-text">Default: 6262</div>
+      <input
+        type="number"
+        id="httpPort"
+        name="httpPort"
+        min="1024"
+        max="65535"
+        required
+      >
+      <div id="message" class="message"></div>
+      <div class="button-group">
+        <button type="submit">Save & Restart</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="logs-section">
+    <div class="logs-header">
+      <h3>Application Logs (Last 100 lines)</h3>
+      <button type="button" class="secondary" onclick="refreshLogs()">Refresh</button>
     </div>
-  </form>
+    <div class="log-container" id="log-container">
+      Loading logs...
+    </div>
+  </div>
 
   <script>
     async function loadSettings() {
@@ -130,7 +214,66 @@
       }, 3000);
     }
 
+    async function loadLogs() {
+      try {
+        const logs = await window.api.getLogs();
+        const container = document.getElementById('log-container');
+
+        if (logs.length === 0) {
+          container.innerHTML = '<div style="color: #666;">No logs available</div>';
+          return;
+        }
+
+        container.innerHTML = logs.map(log => {
+          const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleString() : '';
+          const level = log.level || 'INFO';
+          const message = log.message || '';
+
+          // Format data with proper indentation
+          let dataHtml = '';
+          if (log.data) {
+            const dataStr = typeof log.data === 'string'
+              ? log.data
+              : JSON.stringify(log.data, null, 2);
+            dataHtml = `<div class="log-data">${escapeHtml(dataStr)}</div>`;
+          }
+
+          return `<div class="log-entry ${level}">
+            <span class="timestamp">${timestamp}</span>
+            <span class="level">[${level}]</span>
+            <span class="message">${escapeHtml(message)}</span>
+            ${dataHtml}
+          </div>`;
+        }).join('');
+
+        // Auto-scroll to bottom
+        container.scrollTop = container.scrollHeight;
+      } catch (error) {
+        document.getElementById('log-container').innerHTML =
+          '<div style="color: #dc3545;">Failed to load logs</div>';
+      }
+    }
+
+    async function refreshLogs() {
+      await loadLogs();
+    }
+
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, m => map[m]);
+    }
+
     loadSettings();
+    loadLogs();
+
+    // Auto-refresh logs every 2 seconds
+    setInterval(loadLogs, 2000);
   </script>
 </body>
 </html>

@@ -1,5 +1,7 @@
 const { BrowserWindow, ipcMain, app } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const config = require('../utils/config');
 const logger = require('../utils/logger');
 
@@ -46,6 +48,29 @@ class SettingsWindow {
       app.relaunch();
       app.quit();
     });
+
+    // Get logs
+    ipcMain.handle('get-logs', () => {
+      try {
+        const logFile = path.join(os.homedir(), '.media-control-bridge', 'logs', 'app.log');
+        if (fs.existsSync(logFile)) {
+          const content = fs.readFileSync(logFile, 'utf8');
+          // Get last 100 lines
+          const lines = content.split('\n').filter(line => line.trim()).slice(-100);
+          return lines.map(line => {
+            try {
+              return JSON.parse(line);
+            } catch {
+              return { timestamp: '', level: 'RAW', message: line };
+            }
+          });
+        }
+        return [];
+      } catch (error) {
+        logger.error('Error reading logs:', error);
+        return [];
+      }
+    });
   }
 
   create() {
@@ -55,12 +80,13 @@ class SettingsWindow {
     }
 
     this.window = new BrowserWindow({
-      width: 300,
-      height: 200,
-      resizable: false,
+      width: 700,
+      height: 600,
+      resizable: true,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      autoHideMenuBar: true,
       show: false,
       title: 'Settings',
       webPreferences: {
@@ -69,6 +95,9 @@ class SettingsWindow {
         preload: path.join(__dirname, 'settings-preload.js')
       }
     });
+
+    // Remove menu bar completely
+    this.window.setMenuBarVisibility(false);
 
     // Load the settings page
     this.window.loadFile(path.join(__dirname, '../../../resources/settings.html'));

@@ -20,19 +20,27 @@ class TrayManager {
 
   create() {
     try {
-      // Load the icon
-      const iconPath = path.join(__dirname, '../../assets/mcb-icon.png');
+      // Load the icon - different formats for different platforms
+      let iconPath;
       let icon;
+
+      // Windows uses .ico format, macOS uses PNG
+      if (process.platform === 'win32') {
+        iconPath = path.join(__dirname, '../../assets/mcb-icon.ico');
+      } else {
+        iconPath = path.join(__dirname, '../../assets/mcb-icon.png');
+      }
 
       try {
         icon = nativeImage.createFromPath(iconPath);
 
-        // Resize for menu bar (16x16 for normal, 32x32 for retina)
-        if (!icon.isEmpty()) {
+        // Resize for macOS menu bar
+        if (process.platform === 'darwin' && !icon.isEmpty()) {
           icon = icon.resize({ width: 16, height: 16 });
-        } else {
+        }
+
+        if (icon.isEmpty()) {
           logger.warn('Icon is empty, using default');
-          // Create a simple default icon
           icon = nativeImage.createEmpty();
         }
       } catch (error) {
@@ -42,6 +50,13 @@ class TrayManager {
 
       this.tray = new Tray(icon);
       this.tray.setToolTip('Media Control Bridge');
+
+      // Windows: Handle left-click to show menu
+      if (process.platform === 'win32') {
+        this.tray.on('click', () => {
+          this.tray.popUpContextMenu();
+        });
+      }
 
       // Set up event handlers
       this.setupMediaEventHandlers();
@@ -60,22 +75,35 @@ class TrayManager {
 
   setupMediaEventHandlers() {
     this.mediaInterface.on('track_changed', (data) => {
-      this.currentTrack = data;
-      this.currentApp = data.appName;
+      logger.info('Tray received track_changed:', data);
+      this.currentTrack = data || null;
+      if (data && data.appName) {
+        this.currentApp = data.appName;
+      }
+      logger.info(`Tray updating menu with track: ${this.currentTrack?.title}, app: ${this.currentApp}`);
       this.updateMenu();
     });
 
     this.mediaInterface.on('playback_state_changed', (data) => {
-      this.isPlaying = data.isPlaying;
+      logger.info('Tray received playback_state_changed:', data);
+      if (data && typeof data.isPlaying !== 'undefined') {
+        this.isPlaying = data.isPlaying;
+      }
+      logger.info(`Tray updating menu with isPlaying: ${this.isPlaying}`);
       this.updateMenu();
     });
 
     this.mediaInterface.on('media_connected', (data) => {
-      this.currentApp = data.appName;
+      logger.info('Tray received media_connected:', data);
+      if (data && data.appName) {
+        this.currentApp = data.appName;
+      }
+      logger.info(`Tray updating menu with app: ${this.currentApp}`);
       this.updateMenu();
     });
 
     this.mediaInterface.on('media_disconnected', () => {
+      logger.info('Tray received media_disconnected');
       this.currentTrack = null;
       this.currentApp = null;
       this.isPlaying = false;
@@ -87,10 +115,13 @@ class TrayManager {
     // Get current state from media interface
     const status = this.mediaInterface.getFullStatus();
 
-    if (status.connected) {
-      this.currentApp = status.appName;
-      this.isPlaying = status.isPlaying;
-
+    if (status && status.connected) {
+      if (status.appName) {
+        this.currentApp = status.appName;
+      }
+      if (typeof status.isPlaying !== 'undefined') {
+        this.isPlaying = status.isPlaying;
+      }
       if (status.track) {
         this.currentTrack = status.track;
       }

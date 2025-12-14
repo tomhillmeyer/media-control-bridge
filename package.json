@@ -2,7 +2,7 @@
   "name": "media-control-bridge",
   "productName": "Media Control Bridge",
   "version": "1.0.0",
-  "description": "Bridge media players to Bitfocus Companion via OS media controls",
+  "description": "Media Control Bridge",
   "main": "src/main/index.js",
   "author": {
     "name": "Tom Hillmeyer",
@@ -51,7 +51,11 @@
       "resources/**/*",
       "assets/mcb-app-icon.png",
       "assets/mcb-icon.png",
+      "assets/mcb-icon.ico",
       "package.json"
+    ],
+    "asarUnpack": [
+      "resources/bin/**/*"
     ],
     "directories": {
       "output": "dist"
@@ -95,27 +99,24 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
+          "arch": ["x64"]
         }
       ],
-      "icon": "assets/mcb-app-icon.png",
-      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+      "icon": "assets/mcb-app-icon.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "${productName}-${version}-win-installer.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-win-portable.${ext}"
     }
   }
 }

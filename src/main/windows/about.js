@@ -19,6 +19,7 @@ class AboutWindow {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
+      autoHideMenuBar: true,
       show: false,
       title: 'About Media Control Bridge',
       webPreferences: {
@@ -26,6 +27,9 @@ class AboutWindow {
         contextIsolation: true
       }
     });
+
+    // Remove menu bar completely
+    this.window.setMenuBarVisibility(false);
 
     // Load the about page
     this.window.loadFile(path.join(__dirname, '../../../resources/about.html'));
