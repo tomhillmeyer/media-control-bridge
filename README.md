@@ -5,6 +5,8 @@
 
 Control system media (Spotify, Apple Music, YouTube, VLC, etc.) on macOS and Windows over HTTP and receive real-time updates via WebSocket.
 
+![Screenshot](https://github.com/tomhillmeyer/media-control-bridge/blob/main/assets/mcb-screenshot-1.png?raw=true)
+
 ## API
 
 Server runs on `http://localhost:6262` by default (configurable via the app's Settings menu).
