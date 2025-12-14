@@ -1,3 +1,6 @@
+<img src="https://raw.githubusercontent.com/tomhillmeyer/media-control-bridge/refs/heads/main/assets/mcb-app-icon.png" alt="drawing" width="100"/>
+
+
 # Media Control Bridge
 
 Control system media (Spotify, Apple Music, YouTube, VLC, etc.) on macOS and Windows over HTTP and receive real-time updates via WebSocket.
