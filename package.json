@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
+    "electron-notarize": "^1.2.2",
     "express": "^4.18.2",
     "ws": "^8.14.2"
   },
@@ -61,13 +62,7 @@
       "output": "dist"
     },
     "mac": {
-      "target": {
-        "target": "dmg",
-        "arch": [
-          "x64",
-          "arm64"
-        ]
-      },
+      "target": "dmg",
       "icon": "assets/mcb-app-icon.png",
       "category": "public.app-category.utilities",
       "hardenedRuntime": true,
@@ -76,11 +71,13 @@
       "gatekeeperAssess": false,
       "identity": "Creativeland, LLC (22SGVMMH49)",
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "notarize": {
+        "teamId": "22SGVMMH49"
+      },
       "extendInfo": {
         "LSUIElement": true
       }
     },
-    "afterSign": "notarize.js",
     "dmg": {
       "contents": [
         {
@@ -99,11 +96,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/mcb-app-icon.png"
