@@ -11,16 +11,24 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "build:win-helper": "node scripts/build-windows-helper.js",
+    "predist:win": "npm run build:win-helper",
+    "predist:win:x64": "npm run build:win-helper",
+    "predist:win:arm64": "npm run build:win-helper",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:mac:arm": "electron-builder --mac --arm64",
-    "dist:mac:intel": "electron-builder --mac --x64"
+    "dist:mac:intel": "electron-builder --mac --x64",
+    "dist:win": "electron-builder --win",
+    "dist:win:x64": "electron-builder --win --x64",
+    "dist:win:arm64": "electron-builder --win --arm64"
   },
   "keywords": [
     "electron",
     "media",
     "companion",
-    "macos"
+    "macos",
+    "windows"
   ],
   "license": "MIT",
   "dependencies": {
@@ -82,6 +90,32 @@
           "path": "/Applications"
         }
       ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/mcb-app-icon.png",
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }

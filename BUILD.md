@@ -1,13 +1,20 @@
-# Building Media Control Bridge for macOS
+# Building Media Control Bridge
 
-This guide explains how to build and distribute the Media Control Bridge app for macOS.
+This guide explains how to build and distribute the Media Control Bridge app for macOS and Windows.
 
 ## Prerequisites
 
+### All Platforms
+1. **Node.js** 18+ and npm
+
+### macOS Builds
 1. **macOS** (required for building macOS apps)
 2. **Xcode Command Line Tools** (for code signing)
 3. **Apple Developer Account** (for signing and notarization)
-4. **Node.js** 18+ and npm
+
+### Windows Builds
+1. **.NET 7.0 SDK** or later (for building the MediaHelper)
+2. **Windows** (optional - can cross-compile from Mac/Linux)
 
 ## Setup
 
@@ -17,7 +24,20 @@ This guide explains how to build and distribute the Media Control Bridge app for
 npm install
 ```
 
-### 2. Configure Apple Developer Credentials
+### 2. Install .NET SDK (Required for Windows builds)
+
+The Windows version requires a C# helper executable. To build it, you need the .NET SDK:
+
+**On Mac** (using Homebrew):
+```bash
+brew install --cask dotnet-sdk
+```
+
+**On Windows/Linux**: Download from [https://dotnet.microsoft.com/download](https://dotnet.microsoft.com/download)
+
+**Note**: The Windows helper is automatically built when you run `npm run dist:win` - you don't need to build it manually!
+
+### 3. Configure Apple Developer Credentials (macOS only)
 
 For signed and notarized builds, create a `.env` file in the project root:
 
@@ -41,7 +61,7 @@ APPLE_TEAM_ID=22SGVMMH49
 - **APPLE_TEAM_ID**: Find at [developer.apple.com/account](https://developer.apple.com/account)
   - Go to: Membership → Team ID
 
-### 3. Code Signing Certificate
+### 4. Code Signing Certificate (macOS only)
 
 Ensure you have the **"Creativeland, LLC (22SGVMMH49)"** certificate installed in Keychain Access.
 
@@ -55,21 +75,23 @@ If not available, update `package.json` to use your certificate:
 
 ## Building
 
-### Development Build (No Signing)
+### Development Build
 
-To test the app without signing:
+To test the app without building:
 
 ```bash
 npm start
 ```
 
-### Production Build
+### Production Builds
+
+#### macOS
 
 Build a signed and notarized DMG for distribution:
 
 ```bash
 # Build for both Intel and Apple Silicon
-npm run dist
+npm run dist:mac
 
 # Or build for specific architecture:
 npm run dist:mac:arm    # Apple Silicon (M1/M2/M3)
@@ -82,9 +104,40 @@ The built app will be in the `dist/` directory:
 dist/
 ├── Media Control Bridge-1.0.0-mac-arm64.dmg
 ├── Media Control Bridge-1.0.0-mac-x64.dmg
-└── mac/
+└── mac-arm64/
     └── Media Control Bridge.app
 ```
+
+#### Windows
+
+Build installers and portable executables:
+
+```bash
+# Build for both x64 and ARM64
+npm run dist:win
+
+# Or build for specific architecture:
+npm run dist:win:x64     # Intel/AMD 64-bit
+npm run dist:win:arm64   # ARM64 (Surface, etc.)
+```
+
+The built app will be in the `dist/` directory:
+
+```
+dist/
+├── Media Control Bridge-1.0.0-win-x64.exe         # NSIS installer
+├── Media Control Bridge-1.0.0-win-arm64.exe       # NSIS installer
+├── Media Control Bridge-1.0.0-win-x64-portable.exe
+└── Media Control Bridge-1.0.0-win-arm64-portable.exe
+```
+
+#### Build All Platforms
+
+```bash
+npm run dist
+```
+
+This builds for both macOS and Windows (if on appropriate platform or with cross-compilation configured).
 
 ## Build Process
 

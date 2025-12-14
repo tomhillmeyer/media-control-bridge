@@ -39,6 +39,14 @@ media-control-bridge/
 │   └── preload/
 │       └── index.js                 # Preload script for IPC
 │
+├── helpers/
+│   ├── windows/
+│   │   ├── MediaHelper/             # C# project for Windows media control
+│   │   │   ├── MediaHelper.csproj
+│   │   │   ├── Program.cs
+│   │   │   └── build.bat            # Script to build executable
+│   │   └── MediaHelper.exe          # Compiled helper (bundled with app)
+│
 ├── resources/
 │   ├── icon.png                     # App icon
 │   ├── iconTemplate.png             # Mac menu bar icon (template)
@@ -79,7 +87,9 @@ media-control-bridge/
 - Fallback: `node-ffi-napi` for direct MediaRemote framework access (most complex)
 
 **Windows:**
-- `windows-media-controller` - Access to Windows Runtime Media APIs (npm package)
+- Small C# helper executable using `Windows.Media.Control` WinRT APIs (bundled with app)
+- Targets: `net7.0-windows10.0.19041.0` or higher
+- No additional npm packages needed - shell out to C# executable
 
 ## Architecture Flow
 
@@ -111,19 +121,23 @@ main/media/index.js (unified API)
 Any Media Player (Spotify, Chrome, VLC, Windows Media Player, etc.)
     ↓ (broadcasts via Windows.Media.Control)
 Windows Media Session
-    ↓ (windows-media-controller npm package)
-main/media/windows.js
+    ↓ (GlobalSystemMediaTransportControlsSessionManager C# helper)
+main/media/windows.js (shells out to helper executable)
     ↓
 main/media/index.js (unified API)
 ```
 
 **Windows Implementation Details:**
-- Use `windows-media-controller` npm package (actively maintained)
-- Monitor GlobalSystemMediaTransportControlsSessionManager events
-- Extract metadata: title, artist, album, thumbnail, playback state, app name
-- Send commands via session controls: play, pause, next, previous
-- Works with any app using SystemMediaTransportControls API
-- Package provides event-based updates (no polling needed)
+- Create a small C# console app using `Windows.Media.Control` namespace
+- Target framework: `net7.0-windows10.0.19041.0` or higher
+- Use `GlobalSystemMediaTransportControlsSessionManager.RequestAsync()` to get session manager
+- Call `GetCurrentSession()` to get active media session
+- Extract metadata: `TryGetMediaPropertiesAsync()` returns Title, Artist, Album, Thumbnail
+- Get playback info: `GetPlaybackInfo()` returns PlaybackStatus (Playing, Paused, etc.)
+- Control commands: `TryPlayAsync()`, `TryPauseAsync()`, `TrySkipNextAsync()`, `TrySkipPreviousAsync()`
+- Node.js shells out to this C# executable and parses JSON output
+- Subscribe to events: `MediaPropertiesChanged`, `PlaybackInfoChanged`, `TimelinePropertiesChanged`
+- For control commands, use simple command-line arguments: `MediaHelper.exe play`, `MediaHelper.exe pause`, etc.
 
 ### 2. Internal Data Flow
 
@@ -317,22 +331,109 @@ exec('osascript -e \'tell application "Spotify" to next track\'');
 
 ### Windows Media Integration
 
-Use `windows-media-controller` package:
-```javascript
-const MediaController = require('windows-media-controller');
+**C# Helper Executable Approach (Recommended)**
 
-const mediaController = new MediaController();
+Create a small C# console app that MCB will shell out to:
 
-mediaController.on('update', (media) => {
-  console.log(media.title, media.artist, media.playbackStatus);
-});
-
-mediaController.on('change', (event) => {
-  // Handle media source changes
-});
+**Project setup:**
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0-windows10.0.19041.0</TargetFramework>
+  </PropertyGroup>
+</Project>
 ```
 
-This package provides event-based updates with no polling needed.
+**C# Helper code structure:**
+```csharp
+using System;
+using System.Text.Json;
+using Windows.Media.Control;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        var manager = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        var session = manager.GetCurrentSession();
+        
+        if (args.Length > 0)
+        {
+            // Handle control commands
+            switch (args[0].ToLower())
+            {
+                case "play":
+                    await session.TryPlayAsync();
+                    break;
+                case "pause":
+                    await session.TryPauseAsync();
+                    break;
+                case "next":
+                    await session.TrySkipNextAsync();
+                    break;
+                case "previous":
+                    await session.TrySkipPreviousAsync();
+                    break;
+            }
+        }
+        else
+        {
+            // Return current media info as JSON
+            var mediaProps = await session.TryGetMediaPropertiesAsync();
+            var playbackInfo = session.GetPlaybackInfo();
+            
+            var info = new
+            {
+                title = mediaProps.Title,
+                artist = mediaProps.Artist,
+                album = mediaProps.AlbumTitle,
+                appName = session.SourceAppUserModelId,
+                isPlaying = playbackInfo.PlaybackStatus == 
+                    GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing
+            };
+            
+            Console.WriteLine(JsonSerializer.Serialize(info));
+        }
+    }
+}
+```
+
+**Node.js integration:**
+```javascript
+const { exec } = require('child_process');
+const path = require('path');
+
+const helperPath = path.join(__dirname, '../../helpers/MediaHelper.exe');
+
+// Get current media info
+function getMediaInfo() {
+    return new Promise((resolve, reject) => {
+        exec(`"${helperPath}"`, (err, stdout, stderr) => {
+            if (err) return reject(err);
+            try {
+                resolve(JSON.parse(stdout));
+            } catch (e) {
+                reject(e);
+            }
+        });
+    });
+}
+
+// Control playback
+function play() {
+    exec(`"${helperPath}" play`);
+}
+
+// Poll for changes every 1-2 seconds
+setInterval(async () => {
+    const info = await getMediaInfo();
+    // Emit events if changed
+}, 1000);
+```
+
+**Helper executable location:**
+Bundle the compiled `MediaHelper.exe` with your Electron app in a `helpers/` directory.
 
 **macOS:**
 - Spotify

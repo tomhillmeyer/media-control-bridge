@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 build/
+resources/bin/
 
 # Logs
 *.log
@@ -27,6 +28,13 @@ Thumbs.db
 # Config (local user config)
 config.json
 
+# C# build artifacts
+native/windows/bin/
+native/windows/obj/
 
-console-commands.txt
+# Documentation (except README.md)
 BUILD.md
+API.md
+WINDOWS-IMPLEMENTATION.md
+media-control-bridge-spec.md
+console-commands.txt

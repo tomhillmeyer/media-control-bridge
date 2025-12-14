@@ -1,6 +1,6 @@
 # Media Control Bridge
 
-Control macOS system media (Spotify, Apple Music, YouTube, VLC, etc.) over HTTP and receive real-time updates via WebSocket.
+Control system media (Spotify, Apple Music, YouTube, VLC, etc.) on macOS and Windows over HTTP and receive real-time updates via WebSocket.
 
 ## API
 

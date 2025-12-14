@@ -24,9 +24,8 @@ class MediaInterface extends EventEmitter {
       const MacMediaController = require('./mac');
       this.platformController = new MacMediaController();
     } else if (platform === 'win32') {
-      // Windows support would go here
-      logger.error('Windows platform not yet supported');
-      throw new Error('Windows platform not yet supported');
+      const WindowsMediaController = require('./windows');
+      this.platformController = new WindowsMediaController();
     } else {
       logger.error('Unsupported platform:', platform);
       throw new Error('Unsupported platform: ' + platform);
