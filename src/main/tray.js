@@ -1,22 +1,27 @@
 const { Tray, Menu, nativeImage, app } = require('electron');
 const path = require('path');
 const logger = require('./utils/logger');
+const AboutWindow = require('./windows/about');
+const SettingsWindow = require('./windows/settings');
 
 class TrayManager {
-  constructor(mediaInterface, httpServer, wsServer) {
+  constructor(mediaInterface, httpServer, wsServer, onSettingsChanged) {
     this.mediaInterface = mediaInterface;
     this.httpServer = httpServer;
     this.wsServer = wsServer;
+    this.onSettingsChanged = onSettingsChanged;
     this.tray = null;
     this.currentTrack = null;
     this.currentApp = null;
     this.isPlaying = false;
+    this.aboutWindow = new AboutWindow();
+    this.settingsWindow = new SettingsWindow(onSettingsChanged);
   }
 
   create() {
     try {
       // Load the icon
-      const iconPath = path.join(__dirname, '../../mcb-icon.png');
+      const iconPath = path.join(__dirname, '../../assets/mcb-icon.png');
       let icon;
 
       try {
@@ -190,6 +195,24 @@ class TrayManager {
 
     menuTemplate.push({ type: 'separator' });
 
+    // Settings
+    menuTemplate.push({
+      label: 'Settings...',
+      click: () => {
+        this.settingsWindow.create();
+      }
+    });
+
+    // About
+    menuTemplate.push({
+      label: 'About',
+      click: () => {
+        this.aboutWindow.create();
+      }
+    });
+
+    menuTemplate.push({ type: 'separator' });
+
     // Quit
     menuTemplate.push({
       label: 'Quit',
@@ -203,6 +226,15 @@ class TrayManager {
   }
 
   destroy() {
+    // Close windows
+    if (this.aboutWindow) {
+      this.aboutWindow.close();
+    }
+    if (this.settingsWindow) {
+      this.settingsWindow.close();
+    }
+
+    // Destroy tray
     if (this.tray) {
       this.tray.destroy();
       this.tray = null;

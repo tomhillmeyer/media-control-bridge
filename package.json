@@ -40,8 +40,9 @@
     "productName": "Media Control Bridge",
     "files": [
       "src/**/*",
-      "mcb-app-icon.png",
-      "mcb-icon.png",
+      "resources/**/*",
+      "assets/mcb-app-icon.png",
+      "assets/mcb-icon.png",
       "package.json"
     ],
     "directories": {
@@ -55,7 +56,7 @@
           "arm64"
         ]
       },
-      "icon": "mcb-app-icon.png",
+      "icon": "assets/mcb-app-icon.png",
       "category": "public.app-category.utilities",
       "hardenedRuntime": true,
       "entitlements": "entitlements.plist",

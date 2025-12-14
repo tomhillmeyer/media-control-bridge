@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: white;
+      color: #333;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .help-text {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #007aff;
+    }
+    .button-group {
+      margin-top: 20px;
+      text-align: right;
+    }
+    button {
+      padding: 6px 16px;
+      font-size: 13px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: #007aff;
+      color: white;
+    }
+    button:hover {
+      background: #0051d5;
+    }
+    .message {
+      font-size: 12px;
+      margin-top: 10px;
+      display: none;
+    }
+    .message.success {
+      color: #28a745;
+    }
+    .message.error {
+      color: #dc3545;
+    }
+    .message.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <form id="settings-form">
+    <label for="httpPort">Port:</label>
+    <div class="help-text">Default: 6262</div>
+    <input
+      type="number"
+      id="httpPort"
+      name="httpPort"
+      min="1024"
+      max="65535"
+      required
+    >
+    <div id="message" class="message"></div>
+    <div class="button-group">
+      <button type="submit">Save & Restart</button>
+    </div>
+  </form>
+
+  <script>
+    async function loadSettings() {
+      try {
+        const settings = await window.api.getSettings();
+        document.getElementById('httpPort').value = settings.httpPort;
+      } catch (error) {
+        showMessage('Failed to load settings', 'error');
+      }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const httpPort = parseInt(document.getElementById('httpPort').value);
+
+      if (httpPort < 1024 || httpPort > 65535) {
+        showMessage('Port must be between 1024 and 65535', 'error');
+        return;
+      }
+
+      try {
+        const result = await window.api.saveSettings({
+          httpPort: httpPort
+        });
+
+        if (result.success) {
+          // Restart the app
+          await window.api.restartApp();
+        } else {
+          showMessage('Failed to save', 'error');
+        }
+      } catch (error) {
+        showMessage('Failed to save', 'error');
+      }
+    });
+
+    function showMessage(text, type) {
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = text;
+      messageEl.className = `message ${type} show`;
+
+      setTimeout(() => {
+        messageEl.classList.remove('show');
+      }, 3000);
+    }
+
+    loadSettings();
+  </script>
+</body>
+</html>

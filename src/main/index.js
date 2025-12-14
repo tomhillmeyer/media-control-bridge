@@ -1,7 +1,5 @@
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
+const { app } = require('electron');
 const logger = require('./utils/logger');
-const config = require('./utils/config');
 const mediaInterface = require('./media/index');
 const HTTPServer = require('./server');
 const WebSocketServer = require('./websocket');
@@ -30,8 +28,13 @@ class MediaControlBridge {
       this.wsServer = new WebSocketServer(mediaInterface, this.httpServer);
       this.wsServer.start();
 
-      // Create system tray
-      this.trayManager = new TrayManager(mediaInterface, this.httpServer, this.wsServer);
+      // Create system tray with settings change callback
+      this.trayManager = new TrayManager(
+        mediaInterface,
+        this.httpServer,
+        this.wsServer,
+        () => this.handleSettingsChanged()
+      );
       this.trayManager.create();
 
       logger.info('Media Control Bridge started successfully');
@@ -64,6 +67,12 @@ class MediaControlBridge {
     }
 
     logger.info('Media Control Bridge stopped');
+  }
+
+  handleSettingsChanged() {
+    logger.info('Settings changed - restart required');
+    // Settings that require restart have been changed
+    // The user will need to restart the app manually
   }
 }
 

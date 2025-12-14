@@ -198,7 +198,7 @@ spctl -a -vv "dist/mac/Media Control Bridge.app"
 
 ## Notes
 
-- The app icon is `mcb-icon.png` in the project root
+- App icons are in the `assets/` directory (`mcb-icon.png` for tray, `mcb-app-icon.png` for app bundle)
 - Build artifacts are in the `dist/` directory (gitignored)
 - The app requires macOS 10.15+ (Catalina or later)
 - Universal build includes both Intel and Apple Silicon binaries
