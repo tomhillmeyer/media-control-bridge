@@ -12,7 +12,8 @@ class MacMediaController {
     };
     this.currentApp = null;
     this.pollInterval = null;
-    this.pollRate = 1000; // Poll every 1 second
+    this.pollRate = 500; // Poll every 500ms for faster track change detection
+    this.lastTrackName = null; // Cache track name for quick comparison
   }
 
   async start() {
@@ -45,14 +46,24 @@ class MacMediaController {
         if (this.currentApp !== null) {
           this.currentApp = null;
           this.currentTrack = null;
+          this.lastTrackName = null;
           this.emit('media_disconnected');
         }
         return;
       }
 
-      // Get track info from the app
-      const trackInfo = await this.fetchTrackInfo(app);
-      const playbackState = await this.fetchPlaybackState(app);
+      // Run quick track name check and playback state in parallel
+      const [quickTrackName, playbackState] = await Promise.all([
+        this.getQuickTrackName(app),
+        this.fetchPlaybackState(app)
+      ]);
+
+      // Only fetch full track info if track name changed
+      let trackInfo = null;
+      if (quickTrackName !== this.lastTrackName) {
+        trackInfo = await this.fetchTrackInfo(app);
+        this.lastTrackName = quickTrackName;
+      }
 
       // Check if app changed
       if (this.currentApp !== app) {
@@ -61,25 +72,30 @@ class MacMediaController {
       }
 
       // Check if track changed
-      if (this.hasTrackChanged(trackInfo)) {
+      if (trackInfo && this.hasTrackChanged(trackInfo)) {
         this.currentTrack = trackInfo;
         this.emit('track_changed', { ...trackInfo, appName: app });
+
+        // Fetch artwork asynchronously only when track changes
+        this.fetchArtworkUrl(app).then(artworkUrl => {
+          if (artworkUrl && this.currentTrack && this.currentTrack.title === trackInfo.title) {
+            this.currentTrack.artwork = artworkUrl;
+            // Emit updated track info with artwork
+            this.emit('track_changed', { ...this.currentTrack, appName: app });
+          }
+        }).catch(() => {
+          // Ignore artwork errors
+        });
       }
 
       // Check for play/pause state changes (critical, needs immediate update)
       const playingChanged = this.currentState.isPlaying !== playbackState.isPlaying;
+      const positionChanged = this.currentState.position !== playbackState.position;
 
-      if (playingChanged) {
-        // Immediate update for play/pause changes
+      // Always emit if playing state changed, or if position changed
+      if (playingChanged || positionChanged) {
         this.currentState = playbackState;
         this.emit('playback_state_changed', playbackState);
-      } else {
-        // Just position changed - only update if position is actually different
-        const positionChanged = this.currentState.position !== playbackState.position;
-        if (positionChanged) {
-          this.currentState = playbackState;
-          this.emit('position_update', { position: playbackState.position });
-        }
       }
 
     } catch (error) {
@@ -87,8 +103,33 @@ class MacMediaController {
     }
   }
 
+  async getQuickTrackName(appName) {
+    try {
+      let script;
+
+      if (appName === 'Spotify') {
+        script = `osascript -e 'tell application "Spotify" to return name of current track'`;
+      } else if (appName === 'Music') {
+        script = `osascript -e 'tell application "Music" to return name of current track'`;
+      } else {
+        return null;
+      }
+
+      const { stdout } = await execAsync(script);
+      return stdout.trim();
+    } catch (error) {
+      return null;
+    }
+  }
+
   async getCurrentMediaApp() {
     try {
+      // Optimization: if we already have a current app, check it first
+      if (this.currentApp) {
+        const stillPlaying = await this.isAppPlaying(this.currentApp);
+        if (stillPlaying) return this.currentApp;
+      }
+
       // Try Spotify first
       const spotifyPlaying = await this.isAppPlaying('Spotify');
       if (spotifyPlaying) return 'Spotify';
@@ -185,15 +226,12 @@ class MacMediaController {
       const { stdout } = await execAsync(script);
       const [title, artist, album, duration] = stdout.trim().split('|');
 
-      // Fetch artwork URL
-      const artworkUrl = await this.fetchArtworkUrl(appName);
-
       const trackInfo = {
         title: title || 'Unknown',
         artist: artist || 'Unknown Artist',
         album: album || 'Unknown Album',
         duration: parseInt(duration) || 0,
-        artwork: artworkUrl
+        artwork: null  // Will be fetched separately only when track changes
       };
 
       return trackInfo;

@@ -90,13 +90,6 @@ class WebSocketServer {
       });
     });
 
-    this.mediaInterface.on('position_update', (data) => {
-      this.broadcast({
-        event: 'position_update',
-        data: data
-      });
-    });
-
     this.mediaInterface.on('media_connected', (data) => {
       this.broadcast({
         event: 'connection_status',
