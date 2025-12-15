@@ -3,6 +3,15 @@ const { promisify } = require('util');
 const execAsync = promisify(exec);
 const logger = require('../utils/logger');
 
+// Timeout for AppleScript calls to prevent hanging
+// Must be shorter than poll rate (1000ms) to avoid overlap
+const APPLESCRIPT_TIMEOUT = 800; // 800ms - leaves 200ms buffer before next poll
+
+// Helper to execute AppleScript with timeout
+async function execWithTimeout(command, timeout = APPLESCRIPT_TIMEOUT) {
+  return await execAsync(command, { timeout });
+}
+
 class MacMediaController {
   constructor() {
     this.currentTrack = null;
@@ -12,24 +21,40 @@ class MacMediaController {
     };
     this.currentApp = null;
     this.pollInterval = null;
-    this.pollRate = 500; // Poll every 500ms for faster track change detection
+    this.pollRate = 1000; // Poll every 1 second (spec recommendation)
     this.lastTrackName = null; // Cache track name for quick comparison
+    this.isChecking = false; // Prevent overlapping checks
+    this.isRunning = false;
   }
 
   async start() {
     logger.info('Starting macOS media controller');
-
-    // Start polling for media changes
-    this.pollInterval = setInterval(() => {
-      this.checkMediaState();
-    }, this.pollRate);
+    this.isRunning = true;
 
     // Do initial check
     await this.checkMediaState();
+
+    // Start polling loop that waits for each check to complete
+    this.pollLoop();
+  }
+
+  async pollLoop() {
+    while (this.isRunning) {
+      // Wait for the poll interval
+      await new Promise(resolve => setTimeout(resolve, this.pollRate));
+
+      // Only check if we're not already checking (prevent overlap)
+      if (!this.isChecking && this.isRunning) {
+        this.checkMediaState().catch(err => {
+          logger.error('Error in poll loop:', err);
+        });
+      }
+    }
   }
 
   stop() {
     logger.info('Stopping macOS media controller');
+    this.isRunning = false;
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
@@ -37,6 +62,14 @@ class MacMediaController {
   }
 
   async checkMediaState() {
+    // Prevent overlapping checks
+    if (this.isChecking) {
+      logger.debug('Skipping check - previous check still in progress');
+      return;
+    }
+
+    this.isChecking = true;
+
     try {
       // Try to get the current playing app and track info
       const app = await this.getCurrentMediaApp();
@@ -100,6 +133,8 @@ class MacMediaController {
 
     } catch (error) {
       logger.error('Error checking media state:', error.message);
+    } finally {
+      this.isChecking = false;
     }
   }
 
@@ -115,7 +150,7 @@ class MacMediaController {
         return null;
       }
 
-      const { stdout } = await execAsync(script);
+      const { stdout } = await execWithTimeout(script);
       return stdout.trim();
     } catch (error) {
       return null;
@@ -223,7 +258,7 @@ class MacMediaController {
         };
       }
 
-      const { stdout } = await execAsync(script);
+      const { stdout } = await execWithTimeout(script);
       const [title, artist, album, duration] = stdout.trim().split('|');
 
       const trackInfo = {
@@ -291,7 +326,7 @@ class MacMediaController {
         return { isPlaying: true, position: 0 };
       }
 
-      const { stdout } = await execAsync(script);
+      const { stdout } = await execWithTimeout(script);
       const [state, position] = stdout.trim().split('|');
 
       return {
