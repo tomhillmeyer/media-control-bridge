@@ -1,6 +1,7 @@
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const path = require('path');
 const logger = require('../utils/logger');
 const config = require('../utils/config');
 
@@ -11,6 +12,24 @@ const APPLESCRIPT_TIMEOUT = 800; // 800ms - leaves 200ms buffer before next poll
 // Helper to execute AppleScript with timeout
 async function execWithTimeout(command, timeout = APPLESCRIPT_TIMEOUT) {
   return await execAsync(command, { timeout });
+}
+
+// Helper to get media-control binary path
+function getMediaControlPath() {
+  const arch = process.arch === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
+  let binPath;
+
+  // Check if running in production (packaged)
+  if (process.resourcesPath && !process.resourcesPath.includes('node_modules')) {
+    // Production: packaged app
+    binPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'bin', arch, 'bin', 'media-control');
+  } else {
+    // Development: relative to project root
+    binPath = path.join(__dirname, '..', '..', '..', 'resources', 'bin', arch, 'bin', 'media-control');
+  }
+
+  logger.debug(`Using media-control at: ${binPath}`);
+  return binPath;
 }
 
 class MacMediaController {
@@ -155,6 +174,16 @@ class MacMediaController {
         else
           return ""
         end if'`;
+      } else if (appName === 'System') {
+        // Use media-control to get quick track name
+        const mediaControlPath = getMediaControlPath();
+        const { stdout } = await execWithTimeout(`"${mediaControlPath}" get`, 2000);
+        try {
+          const info = JSON.parse(stdout);
+          return info?.title || null;
+        } catch (e) {
+          return null;
+        }
       } else {
         return null;
       }
@@ -267,14 +296,30 @@ class MacMediaController {
           return "|||0"
         end if'`;
       } else if (appName === 'System') {
-        // System media fallback - controls work via media keys
-        return {
-          title: 'System Audio',
-          artist: '',
-          album: '',
-          duration: 0,
-          artwork: null
-        };
+        // Use media-control to get system media info
+        const mediaControlPath = getMediaControlPath();
+        const { stdout } = await execWithTimeout(`"${mediaControlPath}" get`, 2000);
+
+        try {
+          const info = JSON.parse(stdout);
+          return {
+            title: info.title || 'System Audio',
+            artist: info.artist || 'Unknown Artist',
+            album: info.album || 'Unknown Album',
+            duration: info.duration ? Math.floor(info.duration * 1000) : 0, // Convert seconds to ms
+            artwork: info.artworkData || null,
+            bundleIdentifier: info.bundleIdentifier || null
+          };
+        } catch (e) {
+          logger.error('Error parsing media-control output:', e);
+          return {
+            title: 'System Audio',
+            artist: '',
+            album: '',
+            duration: 0,
+            artwork: null
+          };
+        }
       } else {
         // For other apps, return generic info
         return {
@@ -364,8 +409,23 @@ class MacMediaController {
           return "stopped|0"
         end if'`;
       } else if (appName === 'System') {
-        // System media - assume playing (controls work even without state info)
-        return { isPlaying: true, position: 0 };
+        // Use media-control to get playback state
+        const mediaControlPath = getMediaControlPath();
+        const { stdout } = await execWithTimeout(`"${mediaControlPath}" get`, 2000);
+
+        try {
+          const info = JSON.parse(stdout);
+          if (!info) {
+            return { isPlaying: false, position: 0 };
+          }
+          return {
+            isPlaying: info.playing || false,
+            position: info.elapsedTime ? Math.floor(info.elapsedTime * 1000) : 0 // Convert to ms
+          };
+        } catch (e) {
+          logger.error('Error parsing media-control playback state:', e);
+          return { isPlaying: false, position: 0 };
+        }
       } else {
         return { isPlaying: true, position: 0 };
       }
@@ -406,20 +466,31 @@ class MacMediaController {
 
   // Helper to send system media key event
   async sendMediaKey(key) {
-    // key can be: 'play', 'pause', 'playpause', 'next', 'previous'
+    // Media key codes for macOS
+    // These are the actual hardware key codes for F7, F8, F9
     const keyCode = {
-      'playpause': 16,  // Play/Pause
-      'next': 17,       // Fast Forward / Next
-      'previous': 18    // Rewind / Previous
+      'playpause': 16,  // Play/Pause (F8)
+      'next': 17,       // Next (F9)
+      'previous': 18    // Previous (F7)
     }[key];
 
     if (!keyCode) {
       throw new Error(`Unknown media key: ${key}`);
     }
 
-    // Use key code simulation - works for all apps via system media controls
-    const script = `osascript -e 'tell application "System Events" to key code ${keyCode}'`;
-    await execWithTimeout(script);
+    // Send the key code - this simulates pressing the media key
+    // Note: This may require Accessibility permissions
+    const script = `osascript -e 'tell application "System Events"
+      key code ${keyCode}
+    end tell'`;
+
+    try {
+      await execWithTimeout(script);
+      logger.info(`Sent media key: ${key} (code ${keyCode})`);
+    } catch (error) {
+      logger.error(`Failed to send media key ${key}:`, error.message);
+      throw error;
+    }
   }
 
   // Control methods
@@ -437,8 +508,9 @@ class MacMediaController {
         }
         await execWithTimeout(script);
       } else {
-        // Use system media keys for other apps
-        await this.sendMediaKey('playpause');
+        // Use media-control for system apps (browsers, VLC, etc.)
+        const mediaControlPath = getMediaControlPath();
+        await execWithTimeout(`"${mediaControlPath}" play`, 2000);
       }
 
       return { success: true };
@@ -462,8 +534,9 @@ class MacMediaController {
         }
         await execWithTimeout(script);
       } else {
-        // Use system media keys for other apps
-        await this.sendMediaKey('playpause');
+        // Use media-control for system apps (browsers, VLC, etc.)
+        const mediaControlPath = getMediaControlPath();
+        await execWithTimeout(`"${mediaControlPath}" pause`, 2000);
       }
 
       return { success: true };
@@ -487,8 +560,9 @@ class MacMediaController {
         }
         await execWithTimeout(script);
       } else {
-        // Use system media keys for other apps
-        await this.sendMediaKey('playpause');
+        // Use media-control for system apps (browsers, VLC, etc.)
+        const mediaControlPath = getMediaControlPath();
+        await execWithTimeout(`"${mediaControlPath}" toggle-play-pause`, 2000);
       }
 
       // Wait a bit and get new state
@@ -516,8 +590,9 @@ class MacMediaController {
         }
         await execWithTimeout(script);
       } else {
-        // Use system media keys for other apps
-        await this.sendMediaKey('next');
+        // Use media-control for system apps (browsers, VLC, etc.)
+        const mediaControlPath = getMediaControlPath();
+        await execWithTimeout(`"${mediaControlPath}" next-track`, 2000);
       }
 
       return { success: true };
@@ -541,8 +616,9 @@ class MacMediaController {
         }
         await execWithTimeout(script);
       } else {
-        // Use system media keys for other apps
-        await this.sendMediaKey('previous');
+        // Use media-control for system apps (browsers, VLC, etc.)
+        const mediaControlPath = getMediaControlPath();
+        await execWithTimeout(`"${mediaControlPath}" previous-track`, 2000);
       }
 
       return { success: true };
