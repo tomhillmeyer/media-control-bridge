@@ -59,6 +59,13 @@ class MediaInterface extends EventEmitter {
         }
         break;
 
+      case 'position_update':
+        if (data && typeof data.position !== 'undefined') {
+          this.currentState.position = data.position;
+          this.emit('position_update', data);
+        }
+        break;
+
       case 'media_connected':
         if (data && data.appName) {
           this.currentApp = data.appName;

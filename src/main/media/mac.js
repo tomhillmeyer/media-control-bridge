@@ -66,13 +66,20 @@ class MacMediaController {
         this.emit('track_changed', { ...trackInfo, appName: app });
       }
 
-      // Always update playback state (for position updates)
-      const positionChanged = this.currentState.position !== playbackState.position;
+      // Check for play/pause state changes (critical, needs immediate update)
       const playingChanged = this.currentState.isPlaying !== playbackState.isPlaying;
 
-      if (positionChanged || playingChanged) {
+      if (playingChanged) {
+        // Immediate update for play/pause changes
         this.currentState = playbackState;
         this.emit('playback_state_changed', playbackState);
+      } else {
+        // Just position changed - only update if position is actually different
+        const positionChanged = this.currentState.position !== playbackState.position;
+        if (positionChanged) {
+          this.currentState = playbackState;
+          this.emit('position_update', { position: playbackState.position });
+        }
       }
 
     } catch (error) {
