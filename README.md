@@ -5,6 +5,8 @@
 
 Control system media (Spotify, Apple Music, YouTube, VLC, etc.) on macOS and Windows over HTTP and receive real-time updates via WebSocket.
 
+You can select a specific media app to control in the settings window, or you can select "Auto" which will use the native media player and whichever app is currently playing.
+
 ![Screenshot](https://github.com/tomhillmeyer/media-control-bridge/blob/main/assets/mcb-screenshot-1.png?raw=true)
 
 ## API
