@@ -29,7 +29,7 @@
       color: #666;
       margin-bottom: 6px;
     }
-    input[type="number"] {
+    input[type="number"], select {
       width: 200px;
       padding: 6px 8px;
       font-size: 13px;
@@ -37,7 +37,7 @@
       border-radius: 4px;
       box-sizing: border-box;
     }
-    input[type="number"]:focus {
+    input[type="number"]:focus, select:focus {
       outline: none;
       border-color: #007aff;
     }
@@ -82,7 +82,19 @@
 <body>
   <div class="settings-section">
     <form id="settings-form">
-      <label for="httpPort">Port:</label>
+      <label for="preferredApp">Preferred Media App:</label>
+      <div class="help-text">Select which app to monitor for media playback</div>
+      <select id="preferredApp" name="preferredApp">
+        <option value="auto">Auto (Follow System Default)</option>
+        <option value="Spotify">Spotify</option>
+        <option value="Music">Apple Music</option>
+        <option value="Safari">Safari</option>
+        <option value="Google Chrome">Google Chrome</option>
+        <option value="Firefox">Firefox</option>
+        <option value="VLC">VLC</option>
+      </select>
+
+      <label for="httpPort" style="margin-top: 20px;">Port:</label>
       <div class="help-text">Default: 6262</div>
       <input
         type="number"
@@ -104,6 +116,7 @@
       try {
         const settings = await window.api.getSettings();
         document.getElementById('httpPort').value = settings.httpPort;
+        document.getElementById('preferredApp').value = settings.preferredApp || 'auto';
       } catch (error) {
         showMessage('Failed to load settings', 'error');
       }
@@ -113,6 +126,7 @@
       e.preventDefault();
 
       const httpPort = parseInt(document.getElementById('httpPort').value);
+      const preferredApp = document.getElementById('preferredApp').value;
 
       if (httpPort < 1024 || httpPort > 65535) {
         showMessage('Port must be between 1024 and 65535', 'error');
@@ -121,7 +135,8 @@
 
       try {
         const result = await window.api.saveSettings({
-          httpPort: httpPort
+          httpPort: httpPort,
+          preferredApp: preferredApp
         });
 
         if (result.success) {

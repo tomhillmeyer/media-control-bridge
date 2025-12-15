@@ -16,7 +16,8 @@ class SettingsWindow {
     // Get current settings
     ipcMain.handle('get-settings', () => {
       return {
-        httpPort: config.get('server.httpPort') || 6262
+        httpPort: config.get('server.httpPort') || 6262,
+        preferredApp: config.get('media.preferredApp') || 'auto'
       };
     });
 
@@ -24,14 +25,16 @@ class SettingsWindow {
     ipcMain.handle('save-settings', async (_event, settings) => {
       try {
         const oldPort = config.get('server.httpPort');
+        const oldApp = config.get('media.preferredApp');
 
         config.set('server.httpPort', parseInt(settings.httpPort));
         config.set('server.websocketPort', parseInt(settings.httpPort));
+        config.set('media.preferredApp', settings.preferredApp || 'auto');
 
         logger.info('Settings saved:', settings);
 
-        // Notify that settings changed if port changed
-        if (oldPort !== parseInt(settings.httpPort) && this.onSettingsChanged) {
+        // Notify that settings changed if port or app changed
+        if ((oldPort !== parseInt(settings.httpPort) || oldApp !== settings.preferredApp) && this.onSettingsChanged) {
           this.onSettingsChanged();
         }
 

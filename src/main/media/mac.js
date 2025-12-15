@@ -2,6 +2,7 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 const logger = require('../utils/logger');
+const config = require('../utils/config');
 
 // Timeout for AppleScript calls to prevent hanging
 // Must be shorter than poll rate (1000ms) to avoid overlap
@@ -159,23 +160,23 @@ class MacMediaController {
 
   async getCurrentMediaApp() {
     try {
-      // Optimization: if we already have a current app, check it first
+      const preferredApp = config.get('media.preferredApp') || 'auto';
+
+      // If user has a preferred app, check only that one
+      if (preferredApp !== 'auto') {
+        const isPlaying = await this.isAppPlaying(preferredApp);
+        return isPlaying ? preferredApp : null;
+      }
+
+      // Auto mode: check current app first for performance
       if (this.currentApp) {
         const stillPlaying = await this.isAppPlaying(this.currentApp);
         if (stillPlaying) return this.currentApp;
       }
 
-      // Try Spotify first
-      const spotifyPlaying = await this.isAppPlaying('Spotify');
-      if (spotifyPlaying) return 'Spotify';
-
-      // Try Music (Apple Music)
-      const musicPlaying = await this.isAppPlaying('Music');
-      if (musicPlaying) return 'Music';
-
-      // Try other common apps
-      const apps = ['Safari', 'Google Chrome', 'Firefox', 'VLC'];
-      for (const app of apps) {
+      // Auto mode: scan common media apps
+      const commonApps = ['Spotify', 'Music', 'Safari', 'Google Chrome', 'Firefox', 'VLC'];
+      for (const app of commonApps) {
         const isPlaying = await this.isAppPlaying(app);
         if (isPlaying) return app;
       }
@@ -363,7 +364,7 @@ class MacMediaController {
         ? `osascript -e 'tell application "Music" to play'`
         : `osascript -e 'tell application "${this.currentApp}" to play'`;
 
-      await execAsync(script);
+      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error playing:', error.message);
@@ -379,7 +380,7 @@ class MacMediaController {
         ? `osascript -e 'tell application "Music" to pause'`
         : `osascript -e 'tell application "${this.currentApp}" to pause'`;
 
-      await execAsync(script);
+      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error pausing:', error.message);
@@ -395,11 +396,11 @@ class MacMediaController {
         ? `osascript -e 'tell application "Music" to playpause'`
         : `osascript -e 'tell application "${this.currentApp}" to playpause'`;
 
-      await execAsync(script);
+      await execWithTimeout(script);
 
       // Wait a bit and get new state
       await new Promise(resolve => setTimeout(resolve, 100));
-      const newState = await this.getPlaybackState(this.currentApp);
+      const newState = await this.fetchPlaybackState(this.currentApp);
 
       return { success: true, isPlaying: newState.isPlaying };
     } catch (error) {
@@ -416,7 +417,7 @@ class MacMediaController {
         ? `osascript -e 'tell application "Music" to next track'`
         : `osascript -e 'tell application "${this.currentApp}" to next track'`;
 
-      await execAsync(script);
+      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error skipping to next:', error.message);
@@ -432,7 +433,7 @@ class MacMediaController {
         ? `osascript -e 'tell application "Music" to previous track'`
         : `osascript -e 'tell application "${this.currentApp}" to previous track'`;
 
-      await execAsync(script);
+      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error going to previous:', error.message);

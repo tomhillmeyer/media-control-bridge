@@ -12,6 +12,7 @@ class Config {
         websocketPort: 6262
       },
       media: {
+        preferredApp: 'auto', // 'auto', 'Spotify', 'Music', 'Chrome', etc.
         allowedApps: ['all'],
         excludedApps: []
       },
