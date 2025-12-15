@@ -144,9 +144,17 @@ class MacMediaController {
       let script;
 
       if (appName === 'Spotify') {
-        script = `osascript -e 'tell application "Spotify" to return name of current track'`;
+        script = `osascript -e 'if application "Spotify" is running then
+          tell application "Spotify" to return name of current track
+        else
+          return ""
+        end if'`;
       } else if (appName === 'Music') {
-        script = `osascript -e 'tell application "Music" to return name of current track'`;
+        script = `osascript -e 'if application "Music" is running then
+          tell application "Music" to return name of current track
+        else
+          return ""
+        end if'`;
       } else {
         return null;
       }
@@ -169,19 +177,22 @@ class MacMediaController {
       }
 
       // Auto mode: check current app first for performance
-      if (this.currentApp) {
+      if (this.currentApp && this.currentApp !== 'System') {
         const stillPlaying = await this.isAppPlaying(this.currentApp);
         if (stillPlaying) return this.currentApp;
       }
 
-      // Auto mode: scan common media apps
-      const commonApps = ['Spotify', 'Music', 'Safari', 'Google Chrome', 'Firefox', 'VLC'];
-      for (const app of commonApps) {
+      // Auto mode: scan supported media apps with AppleScript control
+      const supportedApps = ['Spotify', 'Music'];
+      for (const app of supportedApps) {
         const isPlaying = await this.isAppPlaying(app);
         if (isPlaying) return app;
       }
 
-      return null;
+      // Auto mode fallback: use system media controls
+      // Always return 'System' if no Spotify/Music detected
+      // This allows media keys to work with VLC, browsers, and any other media app
+      return 'System';
     } catch (error) {
       logger.error('Error getting current media app:', error.message);
       return null;
@@ -193,33 +204,33 @@ class MacMediaController {
       let script;
 
       if (appName === 'Spotify') {
-        // First check if Spotify is running
-        script = `osascript -e 'tell application "System Events" to (name of processes) contains "Spotify"'`;
-        const { stdout: isRunning } = await execAsync(script);
-        if (isRunning.trim() !== 'true') {
-          return false;
-        }
-
-        // Then check if it has a track
-        script = `osascript -e 'tell application "Spotify" to return name of current track'`;
-        const { stdout } = await execAsync(script);
-        return stdout.trim().length > 0;
+        // Check if Spotify is running AND has a track without launching it
+        script = `osascript -e 'if application "Spotify" is running then
+          tell application "Spotify"
+            if player state is playing or player state is paused then
+              return "true"
+            end if
+          end tell
+        end if
+        return "false"'`;
+        const { stdout } = await execWithTimeout(script);
+        return stdout.trim() === 'true';
       } else if (appName === 'Music') {
-        // First check if Music is running
-        script = `osascript -e 'tell application "System Events" to (name of processes) contains "Music"'`;
-        const { stdout: isRunning } = await execAsync(script);
-        if (isRunning.trim() !== 'true') {
-          return false;
-        }
-
-        // Then check if it has a track
-        script = `osascript -e 'tell application "Music" to return name of current track'`;
-        const { stdout } = await execAsync(script);
-        return stdout.trim().length > 0;
+        // Check if Music is running AND has a track without launching it
+        script = `osascript -e 'if application "Music" is running then
+          tell application "Music"
+            if player state is playing or player state is paused then
+              return "true"
+            end if
+          end tell
+        end if
+        return "false"'`;
+        const { stdout } = await execWithTimeout(script);
+        return stdout.trim() === 'true';
       } else {
-        // For browsers and other apps, check if they're running
+        // For other apps, just check if they're running
         script = `osascript -e 'tell application "System Events" to (name of processes) contains "${appName}"'`;
-        const { stdout } = await execAsync(script);
+        const { stdout } = await execWithTimeout(script);
         return stdout.trim() === 'true';
       }
     } catch (error) {
@@ -232,24 +243,40 @@ class MacMediaController {
       let script;
 
       if (appName === 'Spotify') {
-        script = `osascript -e 'tell application "Spotify"
-          set trackName to name of current track
-          set artistName to artist of current track
-          set albumName to album of current track
-          set trackDuration to duration of current track
-          return trackName & "|" & artistName & "|" & albumName & "|" & trackDuration
-        end tell'`;
+        script = `osascript -e 'if application "Spotify" is running then
+          tell application "Spotify"
+            set trackName to name of current track
+            set artistName to artist of current track
+            set albumName to album of current track
+            set trackDuration to duration of current track
+            return trackName & "|" & artistName & "|" & albumName & "|" & trackDuration
+          end tell
+        else
+          return "|||0"
+        end if'`;
       } else if (appName === 'Music') {
-        script = `osascript -e 'tell application "Music"
-          set trackName to name of current track
-          set artistName to artist of current track
-          set albumName to album of current track
-          set trackDuration to duration of current track
-          return trackName & "|" & artistName & "|" & albumName & "|" & trackDuration
-        end tell'`;
+        script = `osascript -e 'if application "Music" is running then
+          tell application "Music"
+            set trackName to name of current track
+            set artistName to artist of current track
+            set albumName to album of current track
+            set trackDuration to duration of current track
+            return trackName & "|" & artistName & "|" & albumName & "|" & trackDuration
+          end tell
+        else
+          return "|||0"
+        end if'`;
+      } else if (appName === 'System') {
+        // System media fallback - controls work via media keys
+        return {
+          title: 'System Audio',
+          artist: '',
+          album: '',
+          duration: 0,
+          artwork: null
+        };
       } else {
-        // For browsers, we can't easily get track info via AppleScript
-        // Return generic info
+        // For other apps, return generic info
         return {
           title: 'Playing from ' + appName,
           artist: 'Unknown Artist',
@@ -262,11 +289,16 @@ class MacMediaController {
       const { stdout } = await execWithTimeout(script);
       const [title, artist, album, duration] = stdout.trim().split('|');
 
+      // Spotify returns duration in milliseconds, Music returns seconds
+      const durationMs = appName === 'Music'
+        ? Math.floor(parseFloat(duration) || 0) * 1000  // Convert seconds to milliseconds
+        : Math.floor(parseFloat(duration) || 0);         // Already in milliseconds
+
       const trackInfo = {
         title: title || 'Unknown',
         artist: artist || 'Unknown Artist',
         album: album || 'Unknown Album',
-        duration: parseInt(duration) || 0,
+        duration: durationMs,
         artwork: null  // Will be fetched separately only when track changes
       };
 
@@ -312,17 +344,28 @@ class MacMediaController {
       let script;
 
       if (appName === 'Spotify') {
-        script = `osascript -e 'tell application "Spotify"
-          set playerState to player state as string
-          set playerPosition to player position
-          return playerState & "|" & playerPosition
-        end tell'`;
+        script = `osascript -e 'if application "Spotify" is running then
+          tell application "Spotify"
+            set playerState to player state as string
+            set playerPosition to player position
+            return playerState & "|" & playerPosition
+          end tell
+        else
+          return "stopped|0"
+        end if'`;
       } else if (appName === 'Music') {
-        script = `osascript -e 'tell application "Music"
-          set playerState to player state as string
-          set playerPosition to player position
-          return playerState & "|" & playerPosition
-        end tell'`;
+        script = `osascript -e 'if application "Music" is running then
+          tell application "Music"
+            set playerState to player state as string
+            set playerPosition to player position
+            return playerState & "|" & playerPosition
+          end tell
+        else
+          return "stopped|0"
+        end if'`;
+      } else if (appName === 'System') {
+        // System media - assume playing (controls work even without state info)
+        return { isPlaying: true, position: 0 };
       } else {
         return { isPlaying: true, position: 0 };
       }
@@ -355,16 +398,49 @@ class MacMediaController {
     );
   }
 
+  // Helper to determine if app supports AppleScript control
+  supportsAppleScriptControl(appName) {
+    // Apps with reliable AppleScript APIs
+    return appName === 'Spotify' || appName === 'Music';
+  }
+
+  // Helper to send system media key event
+  async sendMediaKey(key) {
+    // key can be: 'play', 'pause', 'playpause', 'next', 'previous'
+    const keyCode = {
+      'playpause': 16,  // Play/Pause
+      'next': 17,       // Fast Forward / Next
+      'previous': 18    // Rewind / Previous
+    }[key];
+
+    if (!keyCode) {
+      throw new Error(`Unknown media key: ${key}`);
+    }
+
+    // Use key code simulation - works for all apps via system media controls
+    const script = `osascript -e 'tell application "System Events" to key code ${keyCode}'`;
+    await execWithTimeout(script);
+  }
+
   // Control methods
   async play() {
     if (!this.currentApp) return { success: false, error: 'No media app active' };
 
     try {
-      const script = this.currentApp === 'Music'
-        ? `osascript -e 'tell application "Music" to play'`
-        : `osascript -e 'tell application "${this.currentApp}" to play'`;
+      // If current app supports AppleScript, use it for precise control
+      if (this.supportsAppleScriptControl(this.currentApp)) {
+        let script;
+        if (this.currentApp === 'Music') {
+          script = `osascript -e 'tell application "Music" to play'`;
+        } else {
+          script = `osascript -e 'tell application "${this.currentApp}" to play'`;
+        }
+        await execWithTimeout(script);
+      } else {
+        // Use system media keys for other apps
+        await this.sendMediaKey('playpause');
+      }
 
-      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error playing:', error.message);
@@ -376,11 +452,20 @@ class MacMediaController {
     if (!this.currentApp) return { success: false, error: 'No media app active' };
 
     try {
-      const script = this.currentApp === 'Music'
-        ? `osascript -e 'tell application "Music" to pause'`
-        : `osascript -e 'tell application "${this.currentApp}" to pause'`;
+      // If current app supports AppleScript, use it for precise control
+      if (this.supportsAppleScriptControl(this.currentApp)) {
+        let script;
+        if (this.currentApp === 'Music') {
+          script = `osascript -e 'tell application "Music" to pause'`;
+        } else {
+          script = `osascript -e 'tell application "${this.currentApp}" to pause'`;
+        }
+        await execWithTimeout(script);
+      } else {
+        // Use system media keys for other apps
+        await this.sendMediaKey('playpause');
+      }
 
-      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error pausing:', error.message);
@@ -392,11 +477,19 @@ class MacMediaController {
     if (!this.currentApp) return { success: false, error: 'No media app active' };
 
     try {
-      const script = this.currentApp === 'Music'
-        ? `osascript -e 'tell application "Music" to playpause'`
-        : `osascript -e 'tell application "${this.currentApp}" to playpause'`;
-
-      await execWithTimeout(script);
+      // If current app supports AppleScript, use it for precise control
+      if (this.supportsAppleScriptControl(this.currentApp)) {
+        let script;
+        if (this.currentApp === 'Music') {
+          script = `osascript -e 'tell application "Music" to playpause'`;
+        } else {
+          script = `osascript -e 'tell application "${this.currentApp}" to playpause'`;
+        }
+        await execWithTimeout(script);
+      } else {
+        // Use system media keys for other apps
+        await this.sendMediaKey('playpause');
+      }
 
       // Wait a bit and get new state
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -413,11 +506,20 @@ class MacMediaController {
     if (!this.currentApp) return { success: false, error: 'No media app active' };
 
     try {
-      const script = this.currentApp === 'Music'
-        ? `osascript -e 'tell application "Music" to next track'`
-        : `osascript -e 'tell application "${this.currentApp}" to next track'`;
+      // If current app supports AppleScript, use it for precise control
+      if (this.supportsAppleScriptControl(this.currentApp)) {
+        let script;
+        if (this.currentApp === 'Music') {
+          script = `osascript -e 'tell application "Music" to next track'`;
+        } else {
+          script = `osascript -e 'tell application "${this.currentApp}" to next track'`;
+        }
+        await execWithTimeout(script);
+      } else {
+        // Use system media keys for other apps
+        await this.sendMediaKey('next');
+      }
 
-      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error skipping to next:', error.message);
@@ -429,11 +531,20 @@ class MacMediaController {
     if (!this.currentApp) return { success: false, error: 'No media app active' };
 
     try {
-      const script = this.currentApp === 'Music'
-        ? `osascript -e 'tell application "Music" to previous track'`
-        : `osascript -e 'tell application "${this.currentApp}" to previous track'`;
+      // If current app supports AppleScript, use it for precise control
+      if (this.supportsAppleScriptControl(this.currentApp)) {
+        let script;
+        if (this.currentApp === 'Music') {
+          script = `osascript -e 'tell application "Music" to previous track'`;
+        } else {
+          script = `osascript -e 'tell application "${this.currentApp}" to previous track'`;
+        }
+        await execWithTimeout(script);
+      } else {
+        // Use system media keys for other apps
+        await this.sendMediaKey('previous');
+      }
 
-      await execWithTimeout(script);
       return { success: true };
     } catch (error) {
       logger.error('Error going to previous:', error.message);
