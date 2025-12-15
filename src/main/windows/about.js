@@ -1,9 +1,23 @@
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
 class AboutWindow {
   constructor() {
     this.window = null;
+    this.setupIPC();
+  }
+
+  setupIPC() {
+    // Get app version from package.json
+    ipcMain.handle('get-app-version', () => {
+      try {
+        const packageJson = require('../../../package.json');
+        return packageJson.version;
+      } catch (error) {
+        console.error('Failed to read version:', error);
+        return null;
+      }
+    });
   }
 
   create() {
@@ -14,7 +28,7 @@ class AboutWindow {
 
     this.window = new BrowserWindow({
       width: 300,
-      height: 180,
+      height: 260,
       resizable: false,
       minimizable: false,
       maximizable: false,
@@ -24,7 +38,8 @@ class AboutWindow {
       title: 'About Media Control Bridge',
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        preload: path.join(__dirname, 'about-preload.js')
       }
     });
 

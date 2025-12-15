@@ -1,7 +1,7 @@
 {
   "name": "media-control-bridge",
   "productName": "Media Control Bridge",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Media Control Bridge",
   "main": "src/main/index.js",
   "author": {
@@ -51,7 +51,8 @@
       "src/**/*",
       "resources/**/*",
       "assets/mcb-app-icon.png",
-      "assets/mcb-icon.png",
+      "assets/mcb-icon-black.png",
+      "assets/mcb-icon-white.png",
       "assets/mcb-icon.ico",
       "package.json"
     ],

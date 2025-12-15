@@ -17,10 +17,15 @@
       justify-content: center;
       text-align: center;
     }
+    .app-icon {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 15px;
+    }
     .app-name {
       font-size: 18px;
       font-weight: 600;
-      margin: 20px 0 5px 0;
+      margin: 0 0 5px 0;
     }
     .version {
       font-size: 13px;
@@ -34,11 +39,24 @@
   </style>
 </head>
 <body>
+  <img src="../assets/mcb-app-icon.png" alt="MCB Icon" class="app-icon">
   <div class="app-name">Media Control Bridge</div>
-  <div class="version">Version 1.0.0</div>
+  <div class="version" id="version-container"></div>
   <div class="copyright">Copyright © <span id="year"></span> Tom Hillmeyer</div>
   <script>
     document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Load and display version
+    const versionContainer = document.getElementById('version-container');
+    window.api.getAppVersion().then(version => {
+      if (version) {
+        versionContainer.textContent = 'Version ' + version;
+      } else {
+        versionContainer.style.display = 'none';
+      }
+    }).catch(() => {
+      versionContainer.style.display = 'none';
+    });
   </script>
 </body>
 </html>

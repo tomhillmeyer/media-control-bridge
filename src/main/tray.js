@@ -1,5 +1,6 @@
 const { Tray, Menu, nativeImage, app } = require('electron');
 const path = require('path');
+const os = require('os');
 const logger = require('./utils/logger');
 const AboutWindow = require('./windows/about');
 const SettingsWindow = require('./windows/settings');
@@ -28,7 +29,8 @@ class TrayManager {
       if (process.platform === 'win32') {
         iconPath = path.join(__dirname, '../../assets/mcb-icon.ico');
       } else {
-        iconPath = path.join(__dirname, '../../assets/mcb-icon.png');
+        // macOS: use template images that adapt to light/dark menu bar
+        iconPath = path.join(__dirname, '../../assets/mcb-icon-black.png');
       }
 
       try {
@@ -37,6 +39,8 @@ class TrayManager {
         // Resize for macOS menu bar
         if (process.platform === 'darwin' && !icon.isEmpty()) {
           icon = icon.resize({ width: 16, height: 16 });
+          // Mark as template image so macOS automatically adjusts for light/dark appearance
+          icon.setTemplateImage(true);
         }
 
         if (icon.isEmpty()) {
@@ -121,10 +125,50 @@ class TrayManager {
     }
   }
 
+  getNetworkAddresses() {
+    const addresses = [];
+    const interfaces = os.networkInterfaces();
+
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        // Skip internal (loopback) and non-IPv4 addresses
+        if (iface.family === 'IPv4' && !iface.internal) {
+          addresses.push(iface.address);
+        }
+      }
+    }
+
+    return addresses;
+  }
+
   updateMenu() {
     if (!this.tray) return;
 
     const menuTemplate = [];
+
+    // App version at the top
+    const packageJson = require('../../package.json');
+    menuTemplate.push({
+      label: `MCB v${packageJson.version}`,
+      click: () => {
+        this.aboutWindow.create();
+      }
+    });
+
+    menuTemplate.push({ type: 'separator' });
+
+
+    // Settings
+    menuTemplate.push({
+      label: 'Settings',
+      click: () => {
+        this.settingsWindow.create();
+      }
+    });
+
+
+    menuTemplate.push({ type: 'separator' });
+
 
     // Current track info
     if (this.currentTrack && this.currentTrack.title) {
@@ -144,7 +188,7 @@ class TrayManager {
           : this.currentTrack.artist;
 
         menuTemplate.push({
-          label: `  ${artist}`,
+          label: `${artist}`,
           enabled: false
         });
       }
@@ -158,7 +202,7 @@ class TrayManager {
     // Source app
     if (this.currentApp) {
       menuTemplate.push({
-        label: `Source: ${this.currentApp}`,
+        label: `Playing from ${this.currentApp}`,
         enabled: false
       });
     } else {
@@ -207,33 +251,34 @@ class TrayManager {
 
     // Server info
     const clientCount = this.wsServer.getClientCount();
+    const port = this.httpServer.getPort();
+
+    // Get all network IP addresses
+    const addresses = this.getNetworkAddresses();
+
+
     menuTemplate.push({
-      label: `Server: localhost:${this.httpServer.getPort()}`,
+      label: `API Port: ${port}`,
       enabled: false
     });
 
-    menuTemplate.push({
-      label: `WebSocket clients: ${clientCount}`,
-      enabled: false
+    // Add all network IP addresses
+    addresses.forEach(addr => {
+      menuTemplate.push({
+        label: `${addr}`,
+        enabled: false
+      });
     });
 
     menuTemplate.push({ type: 'separator' });
 
-    // Settings
+
     menuTemplate.push({
-      label: 'Settings...',
-      click: () => {
-        this.settingsWindow.create();
-      }
+      label: `(${clientCount}) WebSocket connections`,
+      enabled: false
     });
 
-    // About
-    menuTemplate.push({
-      label: 'About',
-      click: () => {
-        this.aboutWindow.create();
-      }
-    });
+
 
     menuTemplate.push({ type: 'separator' });
 
