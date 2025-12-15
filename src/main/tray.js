@@ -158,18 +158,6 @@ class TrayManager {
     menuTemplate.push({ type: 'separator' });
 
 
-    // Settings
-    menuTemplate.push({
-      label: 'Settings',
-      click: () => {
-        this.settingsWindow.create();
-      }
-    });
-
-
-    menuTemplate.push({ type: 'separator' });
-
-
     // Current track info
     if (this.currentTrack && this.currentTrack.title) {
       const trackTitle = this.currentTrack.title.length > 40
@@ -278,6 +266,16 @@ class TrayManager {
       enabled: false
     });
 
+    menuTemplate.push({ type: 'separator' });
+
+
+    // Settings
+    menuTemplate.push({
+      label: 'Settings',
+      click: () => {
+        this.settingsWindow.create();
+      }
+    });
 
 
     menuTemplate.push({ type: 'separator' });
