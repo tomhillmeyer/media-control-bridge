@@ -62,6 +62,7 @@
     "directories": {
       "output": "dist"
     },
+    "beforePack": "scripts/beforePack.js",
     "mac": {
       "target": "dmg",
       "icon": "assets/mcb-app-icon.png",
