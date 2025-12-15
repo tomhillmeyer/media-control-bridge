@@ -83,8 +83,8 @@ class SettingsWindow {
     }
 
     this.window = new BrowserWindow({
-      width: 700,
-      height: 600,
+      width: 300,
+      height: 250,
       resizable: true,
       minimizable: false,
       maximizable: false,

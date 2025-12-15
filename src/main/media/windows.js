@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const logger = require('../utils/logger');
+const config = require('../utils/config');
 
 class WindowsMediaController {
   constructor() {
@@ -23,13 +24,23 @@ class WindowsMediaController {
 
     logger.info(`Using MediaHelper at: ${helperPath}`);
 
+    // Get preferred app from config
+    const preferredApp = config.get('media.preferredApp') || 'auto';
+    logger.info(`Preferred app: ${preferredApp}`);
+
     // Set up promise to wait for ready signal BEFORE spawning process
     const readyPromise = new Promise((resolve) => {
       this._readyResolve = resolve;
     });
 
+    // Build args for the helper
+    const args = ['watch'];
+    if (preferredApp && preferredApp !== 'auto') {
+      args.push('--app', preferredApp);
+    }
+
     // Start the watch process
-    this.watchProcess = spawn(helperPath, ['watch'], {
+    this.watchProcess = spawn(helperPath, args, {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -168,8 +179,17 @@ class WindowsMediaController {
     const arch = process.arch === 'arm64' ? 'win-arm64' : 'win-x64';
     const helperPath = this.getHelperPath(arch);
 
+    // Get preferred app from config
+    const preferredApp = config.get('media.preferredApp') || 'auto';
+
+    // Build args with optional app parameter
+    const args = [command];
+    if (preferredApp && preferredApp !== 'auto') {
+      args.push('--app', preferredApp);
+    }
+
     return new Promise((resolve, reject) => {
-      const process = spawn(helperPath, [command], {
+      const process = spawn(helperPath, args, {
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe']
       });

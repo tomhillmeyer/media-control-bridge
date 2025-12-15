@@ -11,17 +11,28 @@ namespace MediaHelper
         private static GlobalSystemMediaTransportControlsSession? currentSession;
         private static string? lastTrackId;
         private static bool lastIsPlaying;
+        private static string? preferredApp = null; // "auto", "Spotify", "Chrome", etc.
 
         static async Task Main(string[] args)
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("Usage: MediaHelper.exe [watch|status|play|pause|next|previous|toggle]");
+                Console.Error.WriteLine("Usage: MediaHelper.exe [watch|status|play|pause|next|previous|toggle] [--app AppName]");
                 Environment.Exit(1);
                 return;
             }
 
             string command = args[0].ToLower();
+
+            // Parse optional --app parameter
+            for (int i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "--app" && i + 1 < args.Length)
+                {
+                    preferredApp = args[i + 1];
+                    break;
+                }
+            }
 
             try
             {
@@ -342,19 +353,44 @@ namespace MediaHelper
                     sessionManager = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().GetAwaiter().GetResult();
                 }
 
-                var session = sessionManager.GetCurrentSession();
+                var sessions = sessionManager.GetSessions();
+
+                // If preferred app is specified (not auto or null), filter by app
+                if (!string.IsNullOrEmpty(preferredApp) && preferredApp.ToLower() != "auto")
+                {
+                    Console.Error.WriteLine($"Looking for preferred app: {preferredApp}");
+
+                    foreach (var session in sessions)
+                    {
+                        string appName = GetAppName(session.SourceAppUserModelId);
+                        Console.Error.WriteLine($"Checking session: {appName} ({session.SourceAppUserModelId})");
+
+                        // Match by friendly name or app ID
+                        if (appName.Equals(preferredApp, StringComparison.OrdinalIgnoreCase) ||
+                            session.SourceAppUserModelId.Contains(preferredApp, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Console.Error.WriteLine($"Found matching session for preferred app: {appName}");
+                            return session;
+                        }
+                    }
+
+                    Console.Error.WriteLine($"Preferred app '{preferredApp}' not found in {sessions.Count} sessions");
+                    return null;
+                }
+
+                // Auto mode: use Windows' current session
+                var currentSession = sessionManager.GetCurrentSession();
 
                 // If GetCurrentSession returns null, try to get the first available session
-                if (session == null)
+                if (currentSession == null)
                 {
-                    var sessions = sessionManager.GetSessions();
                     Console.Error.WriteLine($"GetCurrentSession returned null, trying fallback. Total sessions: {sessions.Count}");
 
                     if (sessions.Count > 0)
                     {
                         // Return the first session
-                        session = sessions[0];
-                        Console.Error.WriteLine($"Using first available session: {session.SourceAppUserModelId}");
+                        currentSession = sessions[0];
+                        Console.Error.WriteLine($"Using first available session: {currentSession.SourceAppUserModelId}");
                     }
                     else
                     {
@@ -363,10 +399,10 @@ namespace MediaHelper
                 }
                 else
                 {
-                    Console.Error.WriteLine($"Current session: {session.SourceAppUserModelId}");
+                    Console.Error.WriteLine($"Current session: {currentSession.SourceAppUserModelId}");
                 }
 
-                return session;
+                return currentSession;
             }
             catch (Exception ex)
             {
