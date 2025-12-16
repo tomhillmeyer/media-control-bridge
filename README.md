@@ -5,9 +5,16 @@
 
 Control system media, Spotify, or Apple Music on macOS and Windows over HTTP and receive real-time updates via WebSocket.
 
-You can select a specific media app to control in the settings window, or you can select "Auto" which will use the native media player and whichever app is currently playing.
+## How to use
+Download the latest release and open the app. This will put an icon in your toolbar on macOS and your taskbar on Windows. Clicking that icon brings up the menu, with a preview of what MCB is connected to and the network connections and ports it's sending that information on. This also gives you pause/next/previous buttons to test your MCB connection.
 
 ![Screenshot](https://github.com/tomhillmeyer/media-control-bridge/blob/main/assets/mcb-screenshot-1.png?raw=true)
+
+Clicking settings opens a window where you can select a media app and change the port. For selecting the media app you can select Auto, Spotify, or Apple Music. Selecting auto will have the app automatically control your actively playing media, according to your system. If that's Spotify or Apple Music it will control those directly. If it's neither of those two (like a web browser, VLC, etc.) it will use your system's media controls.
+
+![Screenshot](https://github.com/tomhillmeyer/media-control-bridge/blob/main/assets/mcb-screenshot-2.png?raw=true)
+![Screenshot](https://github.com/tomhillmeyer/media-control-bridge/blob/main/assets/mcb-screenshot-3.png?raw=true)
+
 
 ## API
 
@@ -53,8 +60,9 @@ Connect to `ws://localhost:6262/ws` for real-time updates.
 - `connection_status` - Media app connected/disconnected
 
 ## Current Compatibility
-|                                                  | macOS + Spotify | macOS + Others | Windows |
-|--------------------------------------------------|-----------------|----------------|---------|
-| Title, Artist, Album, App Name, Connected Status | ✅               | ✅              | ✅       |
-| Duration, Playback Position                      | ✅               | ✅              | ❌       |
-| Album Artwork                                    | ✅               | ❌              | ❌       |
+|                                                  	| macOS + Spotify 	| macOS + Apple Music 	| macOS + Others 	| Windows 	|
+|--------------------------------------------------	|-----------------	|---------------------	|----------------	|---------	|
+| Play, Pause, Next, Previous controls             	| ✅               	| ✅                   	| ✅              	| ✅       	|
+| Title, Artist, Album, App Name, Connected Status 	| ✅               	| ✅                   	| ✅              	| ✅       	|
+| Duration, Playback Position                      	| ✅               	| ✅                   	| ❌              	| ❌       	|
+| Album Artwork                                    	| ✅               	| ❌                   	| ❌              	| ❌       	|

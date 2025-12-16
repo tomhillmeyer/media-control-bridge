@@ -32,6 +32,14 @@ function getMediaControlPath() {
   return binPath;
 }
 
+// Helper to get app name from bundle identifier
+function getAppNameFromBundle(bundleId) {
+  if (!bundleId) return null;
+  // Extract last part of bundle ID (e.g., "com.google.Chrome" -> "Chrome")
+  const parts = bundleId.split('.');
+  return parts[parts.length - 1] || null;
+}
+
 class MacMediaController {
   constructor() {
     this.currentTrack = null;
@@ -40,6 +48,7 @@ class MacMediaController {
       position: 0
     };
     this.currentApp = null;
+    this.currentBundleId = null; // Store bundle ID for System mode apps
     this.pollInterval = null;
     this.pollRate = 1000; // Poll every 1 second (spec recommendation)
     this.lastTrackName = null; // Cache track name for quick comparison
@@ -116,25 +125,35 @@ class MacMediaController {
       if (quickTrackName !== this.lastTrackName) {
         trackInfo = await this.fetchTrackInfo(app);
         this.lastTrackName = quickTrackName;
+
+        // Store bundle ID if this is System mode
+        if (app === 'System' && trackInfo && trackInfo.bundleIdentifier) {
+          this.currentBundleId = trackInfo.bundleIdentifier;
+        }
       }
+
+      // Get display name for the app (use bundle ID name for System mode)
+      const displayAppName = (app === 'System' && this.currentBundleId)
+        ? getAppNameFromBundle(this.currentBundleId) || 'System'
+        : app;
 
       // Check if app changed
       if (this.currentApp !== app) {
         this.currentApp = app;
-        this.emit('media_connected', { appName: app });
+        this.emit('media_connected', { appName: displayAppName });
       }
 
       // Check if track changed
       if (trackInfo && this.hasTrackChanged(trackInfo)) {
         this.currentTrack = trackInfo;
-        this.emit('track_changed', { ...trackInfo, appName: app });
+        this.emit('track_changed', { ...trackInfo, appName: displayAppName });
 
         // Fetch artwork asynchronously only when track changes
         this.fetchArtworkUrl(app).then(artworkUrl => {
           if (artworkUrl && this.currentTrack && this.currentTrack.title === trackInfo.title) {
             this.currentTrack.artwork = artworkUrl;
             // Emit updated track info with artwork
-            this.emit('track_changed', { ...this.currentTrack, appName: app });
+            this.emit('track_changed', { ...this.currentTrack, appName: displayAppName });
           }
         }).catch(() => {
           // Ignore artwork errors
@@ -228,6 +247,14 @@ class MacMediaController {
     }
   }
 
+  getDisplayAppName() {
+    // Return friendly name for System mode, otherwise return the app name
+    if (this.currentApp === 'System' && this.currentBundleId) {
+      return getAppNameFromBundle(this.currentBundleId) || 'System';
+    }
+    return this.currentApp;
+  }
+
   async isAppPlaying(appName) {
     try {
       let script;
@@ -307,7 +334,7 @@ class MacMediaController {
             artist: info.artist || 'Unknown Artist',
             album: info.album || 'Unknown Album',
             duration: info.duration ? Math.floor(info.duration * 1000) : 0, // Convert seconds to ms
-            artwork: info.artworkData || null,
+            artwork: null, // System mode doesn't support artwork URLs (artworkData is base64)
             bundleIdentifier: info.bundleIdentifier || null
           };
         } catch (e) {

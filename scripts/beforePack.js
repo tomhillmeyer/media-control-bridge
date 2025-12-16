@@ -16,17 +16,14 @@ exports.default = async function(context) {
   const frameworksPath = path.join(sourcePath, 'Frameworks');
   const libPath = path.join(sourcePath, 'lib');
 
-  // Remove the Frameworks directory that causes signing issues
+  // Remove only the Frameworks directory that causes signing issues
+  // Keep the lib directory as it contains necessary Perl scripts
   if (fs.existsSync(frameworksPath)) {
     fs.rmSync(frameworksPath, { recursive: true, force: true });
     console.log('Removed Frameworks directory from source');
+  } else {
+    console.log('Frameworks directory not found (may have been removed already)');
   }
 
-  // Remove the lib directory
-  if (fs.existsSync(libPath)) {
-    fs.rmSync(libPath, { recursive: true, force: true });
-    console.log('Removed lib directory from source');
-  }
-
-  console.log('media-control binary will use system Perl as designed');
+  console.log('Keeping lib directory (contains required Perl scripts)');
 };

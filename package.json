@@ -62,7 +62,7 @@
     "directories": {
       "output": "dist"
     },
-    "beforePack": "scripts/beforePack.js",
+    "afterSign": "scripts/afterSign.js",
     "mac": {
       "target": "dmg",
       "icon": "assets/mcb-app-icon.png",
@@ -73,12 +73,13 @@
       "gatekeeperAssess": false,
       "identity": "Creativeland, LLC (22SGVMMH49)",
       "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
-      "notarize": {
-        "teamId": "22SGVMMH49"
-      },
+      "notarize": false,
       "extendInfo": {
         "LSUIElement": true
-      }
+      },
+      "signIgnore": [
+        "MediaRemoteAdapter\\.framework"
+      ]
     },
     "dmg": {
       "contents": [

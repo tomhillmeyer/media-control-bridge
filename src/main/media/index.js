@@ -103,9 +103,14 @@ class MediaInterface extends EventEmitter {
       return null;
     }
 
+    // Get display name (for macOS System mode, shows actual app name)
+    const displayName = this.platformController && this.platformController.getDisplayAppName
+      ? this.platformController.getDisplayAppName()
+      : this.currentApp;
+
     return {
       ...this.currentTrack,
-      appName: this.currentApp
+      appName: displayName
     };
   }
 
@@ -125,9 +130,14 @@ class MediaInterface extends EventEmitter {
   }
 
   getFullStatus() {
+    // Get display name (for macOS System mode, shows actual app name)
+    const displayName = this.platformController && this.platformController.getDisplayAppName
+      ? this.platformController.getDisplayAppName()
+      : this.currentApp;
+
     return {
       connected: this.currentState.connected,
-      appName: this.currentApp,
+      appName: displayName,
       isPlaying: this.currentState.isPlaying,
       track: this.currentTrack ? {
         title: this.currentTrack.title,
